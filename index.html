@@ -172,7 +172,7 @@
       </div>
 
       <!-- STEP 2: Carga -->
-      <div class="step-panel" id="panel-step-2">
+            <div class="step-panel" id="panel-step-2">
         <div class="panel-header">
           <span class="panel-tag">Paso 2 de 4</span>
           <h2 class="panel-title">Datos de la carga</h2>
@@ -206,23 +206,40 @@
           </div>
         </div>
 
-        <div class="field-group">
+        <div class="field-group" style="background: var(--bg-elevated); padding: 15px; border-radius: var(--radius); border: 1px solid var(--border);">
           <label class="field-label">Cuenta litros inicial <span class="req">*</span></label>
           <div class="cuenta-wrap">
-            <input type="number" id="f-cuenta-inicial" class="field-input" placeholder="Debe ser 0" step="0.01" min="0" oninput="validateCuentaInicial()" inputmode="decimal" />
+            <input type="number" id="f-cuenta-inicial" class="field-input" placeholder="Debe ser 0" step="0.01" min="0" oninput="validateCuentaInicial()" inputmode="decimal" style="background: var(--bg-card);" />
             <div id="ci-badge" class="ci-badge hidden">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
           </div>
           <p id="ci-warning" class="field-warn hidden">⚠ La cuenta inicial debe ser 0 para un registro correcto.</p>
+          
+          <button type="button" class="btn btn-outline btn-sm" style="margin-top: 12px; width: 100%; justify-content: center;" onclick="document.getElementById('file-cuenta-inicial').click()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            Agregar fotografía inicial
+          </button>
+          <input type="file" id="file-cuenta-inicial" accept="image/*" capture="environment" style="display:none" onchange="capturarFotoCuenta(event, 'inicial')" />
+          <div style="text-align: center;">
+            <img id="preview-inicial" class="hidden" style="margin-top:10px; border-radius:8px; max-height:150px; border:1px solid var(--border);" />
+          </div>
         </div>
 
-        <div class="field-group">
+        <div class="field-group" style="background: var(--bg-elevated); padding: 15px; border-radius: var(--radius); border: 1px solid var(--border);">
           <label class="field-label">Cuenta litros final <span class="req">*</span></label>
-          <input type="number" id="f-cuenta-final" class="field-input" placeholder="0.00" step="0.01" min="0" oninput="onLitrosChange()" inputmode="decimal" />
+          <input type="number" id="f-cuenta-final" class="field-input" placeholder="0.00" step="0.01" min="0" oninput="onLitrosChange()" inputmode="decimal" style="background: var(--bg-card);" />
+          
+          <button type="button" class="btn btn-outline btn-sm" style="margin-top: 12px; width: 100%; justify-content: center;" onclick="document.getElementById('file-cuenta-final').click()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            Agregar fotografía final
+          </button>
+          <input type="file" id="file-cuenta-final" accept="image/*" capture="environment" style="display:none" onchange="capturarFotoCuenta(event, 'final')" />
+          <div style="text-align: center;">
+            <img id="preview-final" class="hidden" style="margin-top:10px; border-radius:8px; max-height:150px; border:1px solid var(--border);" />
+          </div>
         </div>
 
-        <!-- Medidor visual de litros -->
         <div class="litros-meter" id="litros-meter">
           <div class="meter-label">
             <span>Litros registrados</span>
