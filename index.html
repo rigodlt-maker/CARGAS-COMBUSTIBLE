@@ -4,438 +4,224 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#1C2128" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>FuelControl — Rompeolas Oriente</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Mono&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-<!-- ===================== LOGIN SCREEN ===================== -->
 <div id="screen-login" class="screen active">
-  <div class="login-bg">
-    <div class="login-grid-lines"></div>
-  </div>
+  <div class="login-bg"><div class="login-grid-lines"></div></div>
   <div class="login-content">
     <div class="brand">
       <div class="brand-icon">
-        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-          <path d="M18 4L32 12V24L18 32L4 24V12L18 4Z" stroke="#E8620A" stroke-width="2" fill="none"/>
-          <path d="M18 10L26 15V21L18 26L10 21V15L18 10Z" fill="#E8620A" opacity="0.2"/>
-          <circle cx="18" cy="18" r="3" fill="#E8620A"/>
-        </svg>
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none"><path d="M18 4L32 12V24L18 32L4 24V12L18 4Z" stroke="#E8620A" stroke-width="2"/><circle cx="18" cy="18" r="3" fill="#E8620A"/></svg>
       </div>
-      <div>
-        <h1 class="brand-title">FuelControl</h1>
-        <p class="brand-sub">Rompeolas Oriente</p>
-      </div>
+      <div><h1 class="brand-title">FuelControl</h1><p class="brand-sub">Rompeolas Oriente</p></div>
     </div>
-
     <div class="login-card">
       <p class="login-label">Acceso autorizado</p>
       <h2 class="login-heading">Inicia sesión</h2>
-      <p class="login-desc">Solo correos pre-autorizados pueden acceder al sistema.</p>
-
       <div id="login-error" class="alert alert-error hidden"></div>
-
       <div class="field-group">
         <label class="field-label">Correo electrónico</label>
-        <input type="email" id="login-email" class="field-input" placeholder="tu@correo.com" autocomplete="email" />
+        <input type="email" id="login-email" class="field-input" placeholder="tu@correo.com" />
       </div>
       <div class="field-group">
         <label class="field-label">Contraseña</label>
         <div class="password-wrap">
-          <input type="password" id="login-password" class="field-input" placeholder="••••••••" autocomplete="current-password" />
-          <button class="toggle-pw" type="button" aria-label="Ver contraseña" onclick="togglePassword()">
-            <svg id="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          </button>
+          <input type="password" id="login-password" class="field-input" placeholder="••••••••" />
+          <button class="toggle-pw" onclick="togglePassword()">👁</button>
         </div>
       </div>
-
-      <button class="btn btn-primary" id="btn-login" onclick="handleLogin()">
-        <span class="btn-label">Ingresar</span>
-        <svg class="btn-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-      </button>
-
-      <p class="login-footer">¿Sin acceso? Contacta al administrador del proyecto.</p>
+      <button class="btn btn-primary" id="btn-login" onclick="handleLogin()"><span class="btn-label">Ingresar</span></button>
     </div>
   </div>
 </div>
 
-<!-- ===================== MAIN APP ===================== -->
 <div id="screen-app" class="screen hidden">
-
-  <!-- Header -->
   <header class="app-header">
-    <div class="header-left">
-      <div class="brand-dot"></div>
-      <span class="header-title">FuelControl</span>
-    </div>
-    <div class="header-right">
-      <span id="header-user" class="header-user"></span>
-      <button class="icon-btn" onclick="handleLogout()" title="Cerrar sesión">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-      </button>
-    </div>
+    <div class="header-left"><div class="brand-dot"></div><span class="header-title">FuelControl</span></div>
+    <div class="header-right"><span id="header-user" class="header-user"></span><button class="icon-btn" onclick="handleLogout()">✖</button></div>
   </header>
 
-  <!-- Tab Nav -->
   <nav class="tab-nav">
-    <button class="tab-btn active" onclick="switchTab('registro')" id="tab-registro">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-      Registro
-    </button>
-    <button class="tab-btn" onclick="switchTab('historial')" id="tab-historial">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      Historial
-    </button>
-    <button class="tab-btn" onclick="switchTab('exportar')" id="tab-exportar">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      Exportar
-    </button>
+    <button class="tab-btn active" onclick="switchTab('registro')" id="tab-registro">Registro</button>
+    <button class="tab-btn" onclick="switchTab('historial')" id="tab-historial">Historial</button>
+    <button class="tab-btn hidden" onclick="switchTab('pendientes')" id="tab-pendientes" style="color: var(--orange);">Pendientes ⚠</button>
+    <button class="tab-btn" onclick="switchTab('exportar')" id="tab-exportar">Exportar</button>
   </nav>
 
-  <!-- ====== TAB: REGISTRO ====== -->
   <div class="tab-content active" id="content-registro">
     <div class="form-container">
-
-      <!-- Step indicator -->
       <div class="step-track">
-        <div class="step-item active" id="step-dot-1"><span>1</span><p>Equipo</p></div>
-        <div class="step-line" id="step-line-1"></div>
-        <div class="step-item" id="step-dot-2"><span>2</span><p>Carga</p></div>
-        <div class="step-line" id="step-line-2"></div>
-        <div class="step-item" id="step-dot-3"><span>3</span><p>Ticket</p></div>
-        <div class="step-line" id="step-line-3"></div>
+        <div class="step-item active" id="step-dot-1"><span>1</span><p>Equipo</p></div><div class="step-line" id="step-line-1"></div>
+        <div class="step-item" id="step-dot-2"><span>2</span><p>Carga</p></div><div class="step-line" id="step-line-2"></div>
+        <div class="step-item" id="step-dot-3"><span>3</span><p>Ticket</p></div><div class="step-line" id="step-line-3"></div>
         <div class="step-item" id="step-dot-4"><span>4</span><p>Confirmar</p></div>
       </div>
 
-      <!-- STEP 1: Equipo -->
       <div class="step-panel active" id="panel-step-1">
-        <div class="panel-header">
-          <span class="panel-tag">Paso 1 de 4</span>
-          <h2 class="panel-title">Datos del equipo</h2>
-        </div>
-
+        <div class="panel-header"><span class="panel-tag">Paso 1 de 4</span><h2 class="panel-title">Datos del equipo</h2></div>
+        <div class="field-group"><label class="field-label">Fecha</label><input type="date" id="f-fecha" class="field-input" /></div>
         <div class="field-group">
-          <label class="field-label">Fecha de carga <span class="req">*</span></label>
-          <input type="date" id="f-fecha" class="field-input" />
+          <label class="field-label"># Económico (ECO)</label>
+          <select id="f-eco" class="field-input" onchange="autoCompletarEquipo()"><option value="">Selecciona el # ECO...</option></select>
         </div>
-
-        <!-- SECCIÓN DE MAQUINARIA AUTORELLENABLE -->
+        <div class="field-group"><label class="field-label">Maquinaria</label><input type="text" id="f-maquinaria" class="field-input" readonly /></div>
+        <div class="field-group" style="display:flex; gap:10px;">
+          <div style="flex:1;"><label class="field-label">Marca</label><input type="text" id="f-marca" class="field-input" readonly /></div>
+          <div style="flex:1;"><label class="field-label">Modelo</label><input type="text" id="f-modelo" class="field-input" readonly /></div>
+        </div>
         <div class="field-group">
-          <label class="field-label"># Económico (ECO) <span class="req">*</span></label>
-          <select id="f-eco" class="field-input" onchange="autoCompletarEquipo()">
-            <option value="">Selecciona el # ECO...</option>
-          </select>
-        </div>
-
-        <div class="field-group">
-          <label class="field-label">Maquinaria <span class="req">*</span></label>
-          <input type="text" id="f-maquinaria" class="field-input" readonly style="background-color: var(--bg-elevated);" />
-        </div>
-
-        <div class="field-group" style="display: flex; gap: 10px;">
-          <div style="flex: 1;">
-            <label class="field-label">Marca</label>
-            <input type="text" id="f-marca" class="field-input" readonly style="background-color: var(--bg-elevated);" />
-          </div>
-          <div style="flex: 1;">
-            <label class="field-label">Modelo</label>
-            <input type="text" id="f-modelo" class="field-input" readonly style="background-color: var(--bg-elevated);" />
-          </div>
-        </div>
-
-        <div class="field-group" id="group-horometro">
-          <label class="field-label">
-            Horómetro
-            <span class="field-hint">(último dígito = fracción de hora × 6 min)</span>
-          </label>
+          <label class="field-label">Horómetro <span class="field-hint">(último dígito = 6 min)</span></label>
           <div class="horometro-wrap">
-            <input type="text" id="f-horometro" class="field-input horometro-input" placeholder="Ej. 3421.6" inputmode="decimal" />
+            <input type="number" id="f-horometro" class="field-input" placeholder="Ej. 10002" />
             <div class="horometro-badge" id="horometro-badge">— h</div>
           </div>
-          <div class="toggle-row">
-            <label class="toggle-label">
-              <input type="checkbox" id="chk-sin-horometro" onchange="toggleHorometro()" />
-              <span class="toggle-track"><span class="toggle-thumb"></span></span>
-              Equipo sin horómetro
-            </label>
-          </div>
+          <label class="toggle-label" style="margin-top:10px;"><input type="checkbox" id="chk-sin-horometro" onchange="toggleHorometro()" /> Equipo sin horómetro</label>
         </div>
-
-        <button class="btn btn-primary btn-next" onclick="goStep(2)">Siguiente <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+        <button class="btn btn-primary btn-next" onclick="goStep(2)">Siguiente</button>
       </div>
 
-      <!-- STEP 2: Carga -->
-            <div class="step-panel" id="panel-step-2">
-        <div class="panel-header">
-          <span class="panel-tag">Paso 2 de 4</span>
-          <h2 class="panel-title">Datos de la carga</h2>
-        </div>
-
+      <div class="step-panel" id="panel-step-2">
+        <div class="panel-header"><span class="panel-tag">Paso 2 de 4</span><h2 class="panel-title">Datos de la carga</h2></div>
+        
         <div class="field-group">
-          <label class="field-label">Tipo de combustible <span class="req">*</span></label>
+          <label class="field-label">Combustible</label>
           <div class="radio-group">
-            <label class="radio-card" id="radio-diesel">
-              <input type="radio" name="tipo-combustible" value="Diésel" onchange="onTipoChange()" />
-              <div class="radio-content">
-                <div class="radio-icon diesel-icon">⛽</div>
-                <span>Diésel</span>
-              </div>
-            </label>
-            <label class="radio-card" id="radio-gasolina">
-              <input type="radio" name="tipo-combustible" value="Gasolina" onchange="onTipoChange()" />
-              <div class="radio-content">
-                <div class="radio-icon gas-icon">🔴</div>
-                <span>Gasolina</span>
-              </div>
-            </label>
+            <label class="radio-card"><input type="radio" name="tipo-combustible" value="Diésel" /> Diésel</label>
+            <label class="radio-card"><input type="radio" name="tipo-combustible" value="Gasolina" /> Gasolina</label>
           </div>
         </div>
+        
+        <div class="field-group"><label class="field-label">Litros cargados</label><input type="number" id="f-litros" class="field-input" placeholder="0.00" /></div>
 
-        <div class="field-group">
-          <label class="field-label">Litros cargados <span class="req">*</span></label>
-          <div class="litros-input-wrap">
-            <input type="number" id="f-litros" class="field-input litros-input" placeholder="0.00" step="0.01" min="0" oninput="onLitrosChange()" inputmode="decimal" />
-            <span class="litros-unit">L</span>
-          </div>
-        </div>
-
-        <div class="field-group" style="background: var(--bg-elevated); padding: 15px; border-radius: var(--radius); border: 1px solid var(--border);">
-          <label class="field-label">Cuenta litros inicial <span class="req">*</span></label>
-          <div class="cuenta-wrap">
-            <input type="number" id="f-cuenta-inicial" class="field-input" placeholder="Debe ser 0" step="0.01" min="0" oninput="validateCuentaInicial()" inputmode="decimal" style="background: var(--bg-card);" />
-            <div id="ci-badge" class="ci-badge hidden">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        <div class="field-group" style="background:var(--bg-elevated); padding:15px; border-radius:10px;">
+          <label class="field-label">Cuenta litros INICIAL</label>
+          <input type="number" id="f-cuenta-inicial" class="field-input" placeholder="0.00" />
+          
+          <button class="btn btn-outline btn-sm" id="btn-cam-ini" style="margin-top:10px; width:100%;" onclick="document.getElementById('file-ini').click()">📷 Tomar Foto Inicial</button>
+          <input type="file" id="file-ini" accept="image/*" capture="environment" style="display:none" onchange="previewSurtidor(event, 'ini')" />
+          
+          <div id="preview-box-ini" class="hidden" style="margin-top:15px; text-align:center;">
+            <img id="img-ini" style="max-width:100%; border-radius:8px;" />
+            <div style="display:flex; gap:10px; margin-top:10px;">
+              <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="document.getElementById('file-ini').click()">Repetir</button>
+              <button class="btn btn-success btn-sm" style="flex:1;" onclick="aceptarSurtidor('ini')">Aceptar ✔</button>
             </div>
           </div>
-          <p id="ci-warning" class="field-warn hidden">⚠ La cuenta inicial debe ser 0 para un registro correcto.</p>
-          
-          <button type="button" class="btn btn-outline btn-sm" style="margin-top: 12px; width: 100%; justify-content: center;" onclick="document.getElementById('file-cuenta-inicial').click()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
-            Agregar fotografía inicial
-          </button>
-          <input type="file" id="file-cuenta-inicial" accept="image/*" capture="environment" style="display:none" onchange="capturarFotoCuenta(event, 'inicial')" />
-          <div style="text-align: center;">
-            <img id="preview-inicial" class="hidden" style="margin-top:10px; border-radius:8px; max-height:150px; border:1px solid var(--border);" />
-          </div>
+          <div id="ok-ini" class="alert alert-success hidden" style="margin-top:10px;">✅ Foto Inicial Confirmada</div>
         </div>
 
-        <div class="field-group" style="background: var(--bg-elevated); padding: 15px; border-radius: var(--radius); border: 1px solid var(--border);">
-          <label class="field-label">Cuenta litros final <span class="req">*</span></label>
-          <input type="number" id="f-cuenta-final" class="field-input" placeholder="0.00" step="0.01" min="0" oninput="onLitrosChange()" inputmode="decimal" style="background: var(--bg-card);" />
+        <div class="field-group" style="background:var(--bg-elevated); padding:15px; border-radius:10px;">
+          <label class="field-label">Cuenta litros FINAL</label>
+          <input type="number" id="f-cuenta-final" class="field-input" placeholder="0.00" />
           
-          <button type="button" class="btn btn-outline btn-sm" style="margin-top: 12px; width: 100%; justify-content: center;" onclick="document.getElementById('file-cuenta-final').click()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
-            Agregar fotografía final
-          </button>
-          <input type="file" id="file-cuenta-final" accept="image/*" capture="environment" style="display:none" onchange="capturarFotoCuenta(event, 'final')" />
-          <div style="text-align: center;">
-            <img id="preview-final" class="hidden" style="margin-top:10px; border-radius:8px; max-height:150px; border:1px solid var(--border);" />
+          <button class="btn btn-outline btn-sm" id="btn-cam-fin" style="margin-top:10px; width:100%;" onclick="document.getElementById('file-fin').click()">📷 Tomar Foto Final</button>
+          <input type="file" id="file-fin" accept="image/*" capture="environment" style="display:none" onchange="previewSurtidor(event, 'fin')" />
+          
+          <div id="preview-box-fin" class="hidden" style="margin-top:15px; text-align:center;">
+            <img id="img-fin" style="max-width:100%; border-radius:8px;" />
+            <div style="display:flex; gap:10px; margin-top:10px;">
+              <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="document.getElementById('file-fin').click()">Repetir</button>
+              <button class="btn btn-success btn-sm" style="flex:1;" onclick="aceptarSurtidor('fin')">Aceptar ✔</button>
+            </div>
           </div>
-        </div>
-
-        <div class="litros-meter" id="litros-meter">
-          <div class="meter-label">
-            <span>Litros registrados</span>
-            <span id="meter-value" class="meter-value">— L</span>
-          </div>
-          <div class="meter-bar">
-            <div class="meter-fill" id="meter-fill" style="width:0%"></div>
-          </div>
-          <div class="meter-scale">
-            <span>0</span><span>250</span><span>500</span><span>750</span><span>1000 L</span>
-          </div>
+          <div id="ok-fin" class="alert alert-success hidden" style="margin-top:10px;">✅ Foto Final Confirmada</div>
         </div>
 
         <div class="step-nav">
-          <button class="btn btn-ghost" onclick="goStep(1)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Atrás</button>
-          <button class="btn btn-primary btn-next" onclick="goStep(3)">Siguiente <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+          <button class="btn btn-ghost" onclick="goStep(1)">Atrás</button>
+          <button class="btn btn-primary" onclick="goStep(3)">Siguiente</button>
         </div>
       </div>
 
-      <!-- STEP 3: Ticket -->
       <div class="step-panel" id="panel-step-3">
-        <div class="panel-header">
-          <span class="panel-tag">Paso 3 de 4</span>
-          <h2 class="panel-title">Ticket de carga</h2>
-        </div>
+        <div class="panel-header"><span class="panel-tag">Paso 3 de 4</span><h2 class="panel-title">Ticket de carga</h2></div>
 
-        <div class="field-group">
-          <label class="field-label"># Ticket <span class="req">*</span></label>
-          <input type="text" id="f-ticket" class="field-input" placeholder="Ej. TK-00847" autocomplete="off" />
-        </div>
+        <label class="toggle-label" style="margin-bottom:20px; padding:10px; background:var(--bg-elevated); border-radius:8px;">
+          <input type="checkbox" id="chk-ticket-despues" onchange="toggleTicket()" /> 
+          ⏱ Adjuntar ticket después (Guardar como Pendiente)
+        </label>
 
-        <div class="field-group">
-          <label class="field-label">Foto del ticket <span class="req">*</span></label>
-          <p class="field-desc">Usa la cámara trasera del dispositivo. Se generará un PDF automáticamente.</p>
-
-          <div class="camera-zone" id="camera-zone" onclick="triggerCamera()">
-            <div id="camera-placeholder">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#E8620A" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
-              <p>Toca para capturar</p>
-              <span>Cámara trasera</span>
-            </div>
-            <div id="camera-preview" class="camera-preview hidden">
-              <img id="ticket-img" alt="Ticket capturado" />
-              <div class="scan-overlay">
-                <div class="scan-corner tl"></div>
-                <div class="scan-corner tr"></div>
-                <div class="scan-corner bl"></div>
-                <div class="scan-corner br"></div>
+        <div id="ticket-section">
+          <div class="field-group">
+            <label class="field-label"># Ticket</label>
+            <input type="text" id="f-ticket" class="field-input" placeholder="Ej. TK-00847" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Foto del ticket</label>
+            <button class="btn btn-outline" id="btn-cam-ticket" onclick="document.getElementById('file-ticket').click()" style="width:100%;">📷 Tomar Foto Ticket</button>
+            <input type="file" id="file-ticket" accept="image/*" capture="environment" style="display:none" onchange="previewSurtidor(event, 'ticket')" />
+            
+            <div id="preview-box-ticket" class="hidden" style="margin-top:15px; text-align:center;">
+              <img id="img-ticket" style="max-width:100%; border-radius:8px;" />
+              <div style="display:flex; gap:10px; margin-top:10px;">
+                <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="document.getElementById('file-ticket').click()">Repetir</button>
+                <button class="btn btn-success btn-sm" style="flex:1;" onclick="aceptarSurtidor('ticket')">Aceptar ✔</button>
               </div>
             </div>
+            <div id="ok-ticket" class="alert alert-success hidden" style="margin-top:10px;">✅ Ticket Confirmado</div>
           </div>
-
-          <input type="file" id="file-ticket" accept="image/*" capture="environment" style="display:none" onchange="onPhotoCapture(event)" />
-
-          <!-- Post-capture actions -->
-          <div id="photo-actions" class="photo-actions hidden">
-            <div class="photo-status">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2EA043" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-              <span>Foto capturada</span>
-            </div>
-            <div class="photo-btns">
-              <button class="btn btn-ghost btn-sm" onclick="repeatPhoto()">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
-                Repetir
-              </button>
-              <button class="btn btn-success btn-sm" id="btn-photo-ok" onclick="confirmPhoto()">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                Carga exitosa
-              </button>
-            </div>
-          </div>
-
-          <!-- Multiple photos -->
-          <div id="photos-list" class="photos-list"></div>
-
-          <button class="btn btn-outline btn-sm add-photo-btn" id="btn-add-photo" onclick="triggerCamera()" style="display:none">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Agregar otra foto
-          </button>
         </div>
 
         <div class="step-nav">
-          <button class="btn btn-ghost" onclick="goStep(2)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Atrás</button>
-          <button class="btn btn-primary btn-next" onclick="goStep(4)">Siguiente <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+          <button class="btn btn-ghost" onclick="goStep(2)">Atrás</button>
+          <button class="btn btn-primary" onclick="goStep(4)">Siguiente</button>
         </div>
       </div>
 
-      <!-- STEP 4: Confirmar -->
       <div class="step-panel" id="panel-step-4">
-        <div class="panel-header">
-          <span class="panel-tag">Paso 4 de 4</span>
-          <h2 class="panel-title">Confirmar registro</h2>
-        </div>
-
-        <div class="summary-card" id="summary-card">
-          <!-- Populated by JS -->
-        </div>
-
+        <div class="panel-header"><span class="panel-tag">Paso 4 de 4</span><h2 class="panel-title">Confirmar</h2></div>
+        <div class="summary-card" id="summary-card"></div>
         <div id="submit-error" class="alert alert-error hidden"></div>
         <div id="submit-success" class="alert alert-success hidden"></div>
-
-        <button class="btn btn-primary btn-submit" id="btn-submit" onclick="handleSubmit()">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-          Guardar registro
-        </button>
-
-        <div class="step-nav">
-          <button class="btn btn-ghost" onclick="goStep(3)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Atrás</button>
-        </div>
+        <button class="btn btn-primary" id="btn-submit" onclick="handleSubmit()" style="width:100%; margin-top:15px;">Guardar Registro</button>
+        <div class="step-nav"><button class="btn btn-ghost" onclick="goStep(3)">Atrás</button></div>
       </div>
-
     </div>
   </div>
 
-  <!-- ====== TAB: HISTORIAL ====== -->
-  <div class="tab-content" id="content-historial">
+  <div class="tab-content" id="content-pendientes">
     <div class="list-container">
-      <div class="list-header">
-        <h2>Registros recientes</h2>
-        <div class="filter-row">
-          <input type="date" id="hist-fecha" class="field-input filter-date" onchange="loadHistory()" />
-          <select id="hist-eco" class="field-input filter-eco" onchange="loadHistory()">
-            <option value="">Todos los ECO</option>
-          </select>
-        </div>
-      </div>
-      <div id="history-list" class="history-list">
-        <div class="empty-state">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#3D4551" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <p>Sin registros para mostrar</p>
-          <span>Selecciona una fecha para filtrar</span>
-        </div>
-      </div>
-    </div>
-  </div>
+      <div class="list-header"><h2>Tickets Pendientes</h2><p>Registros que requieren fotografía del ticket para generar PDF.</p></div>
+      
+      <div id="pendientes-list" class="history-list"></div>
 
-  <!-- ====== TAB: EXPORTAR ====== -->
-  <div class="tab-content" id="content-exportar">
-    <div class="export-container">
-      <div class="export-header">
-        <h2>Exportar datos</h2>
-        <p>Genera reportes del periodo seleccionado.</p>
-      </div>
-
-      <div class="export-card">
+      <div id="modal-pendiente" class="hidden" style="background:var(--bg-elevated); padding:20px; border-radius:12px; margin-top:20px; border:1px solid var(--orange);">
+        <h3 id="pend-eco" style="color:var(--orange); margin-bottom:10px;"></h3>
+        <input type="hidden" id="pend-id" />
+        
         <div class="field-group">
-          <label class="field-label">Rango de fechas</label>
-          <div class="date-range">
-            <input type="date" id="exp-desde" class="field-input" />
-            <span class="date-range-sep">→</span>
-            <input type="date" id="exp-hasta" class="field-input" />
+          <label class="field-label"># Ticket Definitivo</label>
+          <input type="text" id="pend-ticket-input" class="field-input" placeholder="Ingresa el folio" />
+        </div>
+        
+        <button class="btn btn-outline" id="btn-cam-pend" onclick="document.getElementById('file-pend').click()" style="width:100%;">📷 Capturar Ticket</button>
+        <input type="file" id="file-pend" accept="image/*" capture="environment" style="display:none" onchange="previewSurtidor(event, 'pend')" />
+        
+        <div id="preview-box-pend" class="hidden" style="margin-top:15px; text-align:center;">
+          <img id="img-pend" style="max-width:100%; border-radius:8px;" />
+          <div style="display:flex; gap:10px; margin-top:10px;">
+            <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="document.getElementById('file-pend').click()">Repetir</button>
+            <button class="btn btn-success btn-sm" style="flex:1;" onclick="aceptarSurtidor('pend')">Aceptar ✔</button>
           </div>
         </div>
-        <div class="field-group">
-          <label class="field-label">Filtrar por ECO</label>
-          <select id="exp-eco" class="field-input">
-            <option value="">Todos</option>
-          </select>
-        </div>
-        <button class="btn btn-primary" onclick="exportCSV()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          Exportar CSV
-        </button>
-      </div>
+        <div id="ok-pend" class="alert alert-success hidden" style="margin-top:10px;">✅ Ticket Confirmado</div>
 
-      <div class="stats-grid" id="stats-grid">
-        <div class="stat-card">
-          <span class="stat-label">Registros hoy</span>
-          <span class="stat-value" id="stat-hoy">—</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Litros hoy</span>
-          <span class="stat-value" id="stat-litros-hoy">—</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Equipos activos</span>
-          <span class="stat-value" id="stat-equipos">—</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Total mes</span>
-          <span class="stat-value" id="stat-mes">—</span>
-        </div>
+        <button class="btn btn-primary" id="btn-save-pend" onclick="guardarPendiente()" style="width:100%; margin-top:20px; display:none;">Cerrar Registro y Generar PDF</button>
+        <button class="btn btn-ghost" onclick="cerrarModalPendiente()" style="width:100%; margin-top:10px;">Cancelar</button>
       </div>
     </div>
   </div>
 
+  <div class="tab-content" id="content-historial"><div class="list-container"><div class="list-header"><h2>Registros</h2><input type="date" id="hist-fecha" class="field-input" onchange="loadHistory()" /></div><div id="history-list" class="history-list"></div></div></div>
+  <div class="tab-content" id="content-exportar"><div class="export-container"><div class="export-header"><h2>Exportar CSV</h2></div><button class="btn btn-primary" onclick="exportCSV()">Descargar</button></div></div>
 </div>
 
-<!-- ===================== LOADING OVERLAY ===================== -->
-<div id="loading-overlay" class="loading-overlay hidden">
-  <div class="loading-card">
-    <div class="spinner"></div>
-    <p id="loading-text">Guardando...</p>
-  </div>
-</div>
-
+<div id="loading-overlay" class="loading-overlay hidden"><div class="loading-card"><div class="spinner"></div><p id="loading-text">Procesando...</p></div></div>
 <script type="module" src="app.js"></script>
 </body>
 </html>
