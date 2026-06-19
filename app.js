@@ -218,24 +218,43 @@ function goStep(n) {
 }
 
 function validateStep(step) {
-  if(step===1) {
+  // PASO 1: Equipo
+  if(step === 1) {
     if(!document.getElementById("f-eco").value) { alert("Selecciona el ECO"); return false; }
-    if(!document.getElementById("chk-sin-horometro").checked && !document.getElementById("f-horometro").value) { alert("Falta horómetro"); return false; }
-  }
-  if(step===2) {
-    if(!document.getElementById("f-litros").value) { alert("Faltan litros"); return false; }
-    if(!estadoFotos.ini) { alert("Debes TOMAR y ACEPTAR la foto del cuenta litros Inicial."); return false; }
-    if(!estadoFotos.fin) { alert("Debes TOMAR y ACEPTAR la foto del cuenta litros Final."); return false; }
-  }
-  if(step===3) {
-    if(!document.getElementById("chk-ticket-despues").checked) {
-      if(!document.getElementById("f-ticket").value) { alert("Falta # de Ticket"); return false; }
-      if(!estadoFotos.ticket) { alert("Debes TOMAR y ACEPTAR la foto del Ticket."); return false; }
+    if(!document.getElementById("chk-sin-horometro").checked && !document.getElementById("f-horometro").value) { 
+      alert("Falta horómetro"); return false; 
     }
+    return true;
   }
-  return true;
-}
 
+  // PASO 2: Carga
+  if(step === 2) {
+    const tipo = document.querySelector('input[name="tipo-combustible"]:checked');
+    if(!tipo) { alert("Selecciona Diésel o Gasolina"); return false; }
+    if(!document.getElementById("f-litros").value) { alert("Faltan litros"); return false; }
+    
+    // Validación de cuenta inicial cero
+    const ci = parseFloat(document.getElementById("f-cuenta-inicial").value);
+    if (isNaN(ci) || ci !== 0) { alert("❌ La cuenta litros inicial debe ser 0."); return false; }
+    
+    if(!document.getElementById("f-cuenta-final").value) { alert("Falta cuenta final"); return false; }
+    
+    // VALIDACIÓN ESTRICTA DE PALOMITAS INICIAL/FINAL
+    if(!estadoFotos.ini) { alert("❌ Debes tomar y CONFIRMAR la foto Inicial."); return false; }
+    if(!estadoFotos.fin) { alert("❌ Debes tomar y CONFIRMAR la foto Final."); return false; }
+    return true;
+  }
+
+  // PASO 3: Ticket
+  if(step === 3) {
+    // Si NO está marcada la casilla de adjuntar después, validamos el ticket y su foto
+    if(!document.getElementById("chk-ticket-despues").checked) {
+      if(!document.getElementById("f-ticket").value) { alert("Ingresa el # de Ticket"); return false; }
+      if(!estadoFotos.ticket) { alert("❌ Debes tomar y CONFIRMAR la foto del Ticket."); return false; }
+    }
+    return true;
+  }
+  
 function buildSummary() {
   const isPendiente = document.getElementById("chk-ticket-despues").checked;
   const html = `
