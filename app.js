@@ -5,11 +5,11 @@
 
 // ---- Cargar Firebase desde CDN ----
 async function loadFirebase() {
-  const { initializeApp }   = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+  const { initializeApp }   = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js");
   const { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
-    = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js");
+    = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js");
   const { getFirestore, collection, addDoc, getDocs, query, where, orderBy, Timestamp }
-    = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
 
   const firebaseConfig = {
     apiKey:            "AIzaSyCeIsd_BrHKbAY1HrYb3HL4vG4cpadUTuU",
@@ -64,6 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Cargar Firebase
   loadFirebase().catch(e => {
+    console.error("Firebase error:", e);
     console.error("Error cargando Firebase:", e);
     showLoginError("Error al conectar con el servidor. Revisa tu conexión.");
   });
