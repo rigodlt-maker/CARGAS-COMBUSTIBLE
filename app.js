@@ -51,9 +51,59 @@ let capturedPhotos = [];
 let photoConfirmed = false;
 
 /* ============================================
+   CATÁLOGO DE MAQUINARIA
+   ============================================ */
+const catalogoEquipos = [
+  { "maquinaria": "CAMION ARTICULADO", "marca": "CAT", "modelo": "745", "interno": "CAT-745-" },
+  { "maquinaria": "CAMION ARTICULADO", "marca": "SANY", "modelo": "SAT40C", "interno": "SANY-SAT40C" },
+  { "maquinaria": "CARGADOR FRONTAL", "marca": "KOMATSU", "modelo": "WA600", "interno": "CFN-600-001" },
+  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "320ELRR", "interno": "EHO-320-E" },
+  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "385 BL", "interno": "EHO-385-" },
+  { "maquinaria": "EXCAVADORA", "marca": "KOMATSU", "modelo": "PC450-LC8", "interno": "EHO-450-" },
+  { "maquinaria": "EXCAVADORA", "marca": "KOMATSU", "modelo": "PC500 LC-10M0", "interno": "PC500 LC-" },
+  { "maquinaria": "EXCAVADORA", "marca": "SANY", "modelo": "SY550HD", "interno": "R-EHO-550" },
+  { "maquinaria": "EXCAVADORA", "marca": "SANY", "modelo": "SY500H", "interno": "R-EHO-500" },
+  { "maquinaria": "GRÚA", "marca": "LINKBELT", "modelo": "LS138", "interno": "GDO-138-X" },
+  { "maquinaria": "MOTOCONFORMADORA", "marca": "SANY", "modelo": "SMG200C-8", "interno": "R-MOT-200-0" },
+  { "maquinaria": "RETROEXCAVADORA", "marca": "JOHN DEERE", "modelo": "310L", "interno": "RHN-310-0" },
+  { "maquinaria": "TRACTOR DE ORUGAS", "marca": "KOMATSU", "modelo": "D65EX-16", "interno": "R-TRO-D6-0" },
+  { "maquinaria": "VIBROCOMPACTADOR", "marca": "CAT", "modelo": "CS11GC", "interno": "VCM-S11-0" }
+];
+
+function cargarSelectorEquipos() {
+  const selectEco = document.getElementById("f-eco");
+  if (!selectEco) return;
+  catalogoEquipos.forEach(equipo => {
+    const option = document.createElement("option");
+    option.value = equipo.interno;
+    option.textContent = `${equipo.interno} - ${equipo.maquinaria}`;
+    selectEco.appendChild(option);
+  });
+}
+
+function autoCompletarEquipo() {
+  const ecoSeleccionado = document.getElementById("f-eco").value;
+  const equipo = catalogoEquipos.find(e => e.interno === ecoSeleccionado);
+  
+  if (equipo) {
+    document.getElementById("f-maquinaria").value = equipo.maquinaria;
+    document.getElementById("f-marca").value = equipo.marca;
+    document.getElementById("f-modelo").value = equipo.modelo;
+    onMaquinariaChange(); // Verifica si es equipo sin horómetro
+  } else {
+    document.getElementById("f-maquinaria").value = "";
+    document.getElementById("f-marca").value = "";
+    document.getElementById("f-modelo").value = "";
+  }
+}
+
+
+/* ============================================
    INIT
    ============================================ */
 document.addEventListener("DOMContentLoaded", () => {
+  cargarSelectorEquipos(); // <-- Agregamos esta línea para llenar el selector
+  
   const today = new Date().toISOString().split("T")[0];
   const dateField = document.getElementById("f-fecha");
   if (dateField) dateField.value = today;
