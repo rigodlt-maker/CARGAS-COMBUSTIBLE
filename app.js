@@ -97,25 +97,24 @@ function autoCompletarEquipo() {
   }
 }
 
-
 /* ============================================
    INIT
    ============================================ */
-document.addEventListener("DOMContentLoaded", () => {
-  cargarSelectorEquipos(); // <-- Agregamos esta línea para llenar el selector
-  
-  const today = new Date().toISOString().split("T")[0];
-  const dateField = document.getElementById("f-fecha");
-  if (dateField) dateField.value = today;
+// Ejecutamos la carga de equipos directamente (sin esperar al DOM porque ya es un módulo)
+cargarSelectorEquipos(); 
 
-  const horoInput = document.getElementById("f-horometro");
-  if (horoInput) horoInput.addEventListener("input", updateHorometroBadge);
+const today = new Date().toISOString().split("T")[0];
+const dateField = document.getElementById("f-fecha");
+if (dateField) dateField.value = today;
 
-  loadFirebase().catch(e => {
-    console.error("Error cargando Firebase:", e);
-    showLoginError("Error al conectar con el servidor. Revisa tu conexión.");
-  });
+const horoInput = document.getElementById("f-horometro");
+if (horoInput) horoInput.addEventListener("input", updateHorometroBadge);
+
+loadFirebase().catch(e => {
+  console.error("Error cargando Firebase:", e);
+  showLoginError("Error al conectar con el servidor. Revisa tu conexión.");
 });
+
 
 /* ============================================
    AUTH Y LISTA BLANCA
