@@ -189,36 +189,38 @@
       <div class="list-header"><h2>Tickets Pendientes</h2><p>Registros que requieren fotografía del ticket para generar PDF.</p></div>
       
       <div id="pendientes-list" class="history-list"></div>
-
-      <div id="modal-pendiente" class="hidden" style="background:var(--bg-elevated); padding:20px; border-radius:12px; margin-top:20px; border:1px solid var(--orange);">
-        <h3 id="pend-eco" style="color:var(--orange); margin-bottom:10px;"></h3>
-        <input type="hidden" id="pend-id" />
-        
-        <div class="field-group">
-          <label class="field-label"># Ticket Definitivo</label>
-          <input type="text" id="pend-ticket-input" class="field-input" placeholder="Ingresa el folio" />
-        </div>
-        
-        <button class="btn btn-outline" id="btn-cam-pend" onclick="document.getElementById('file-pend').click()" style="width:100%;">📷 Capturar Ticket</button>
-        <input type="file" id="file-pend" accept="image/*" capture="environment" style="display:none" onchange="previewSurtidor(event, 'pend')" />
-        
-        <div id="preview-box-pend" class="hidden" style="margin-top:15px; text-align:center;">
-          <img id="img-pend" style="max-width:100%; border-radius:8px;" />
-          <div style="display:flex; gap:10px; margin-top:10px;">
-            <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="document.getElementById('file-pend').click()">Repetir</button>
-            <button class="btn btn-success btn-sm" style="flex:1;" onclick="aceptarSurtidor('pend')">Aceptar ✔</button>
-          </div>
-        </div>
-        <div id="ok-pend" class="alert alert-success hidden" style="margin-top:10px;">✅ Ticket Confirmado</div>
-
-        <button class="btn btn-primary" id="btn-save-pend" onclick="guardarPendiente()" style="width:100%; margin-top:20px; display:none;">Cerrar Registro y Generar PDF</button>
-        <button class="btn btn-ghost" onclick="cerrarModalPendiente()" style="width:100%; margin-top:10px;">Cancelar</button>
-      </div>
     </div>
   </div>
 
   <div class="tab-content" id="content-historial"><div class="list-container"><div class="list-header"><h2>Registros</h2><input type="date" id="hist-fecha" class="field-input" onchange="loadHistory()" /></div><div id="history-list" class="history-list"></div></div></div>
   <div class="tab-content" id="content-exportar"><div class="export-container"><div class="export-header"><h2>Exportar CSV</h2></div><button class="btn btn-primary" onclick="exportCSV()">Descargar</button></div></div>
+</div>
+
+<div id="modal-pendiente" class="modal-overlay hidden" onclick="if(event.target===this) cerrarModalPendiente()">
+  <div class="modal-card">
+    <h3 id="pend-eco" style="color:var(--orange); margin-bottom:10px;"></h3>
+    <input type="hidden" id="pend-id" />
+
+    <div class="field-group">
+      <label class="field-label"># Ticket Definitivo</label>
+      <input type="text" id="pend-ticket-input" class="field-input" placeholder="Ingresa el folio" />
+    </div>
+
+    <button class="btn btn-outline" id="btn-cam-pend" onclick="document.getElementById('file-pend').click()" style="width:100%;">📷 Capturar Ticket</button>
+    <input type="file" id="file-pend" accept="image/*" capture="environment" style="display:none" onchange="previewSurtidor(event, 'pend')" />
+
+    <div id="preview-box-pend" class="hidden" style="margin-top:15px; text-align:center;">
+      <img id="img-pend" style="max-width:100%; border-radius:8px;" />
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="document.getElementById('file-pend').click()">Repetir</button>
+        <button class="btn btn-success btn-sm" style="flex:1;" onclick="aceptarSurtidor('pend')">Aceptar ✔</button>
+      </div>
+    </div>
+    <div id="ok-pend" class="alert alert-success hidden" style="margin-top:10px;">✅ Ticket Confirmado</div>
+
+    <button class="btn btn-primary" id="btn-save-pend" onclick="guardarPendiente()" style="width:100%; margin-top:20px; display:none;">Cerrar Registro y Generar PDF</button>
+    <button class="btn btn-ghost" onclick="cerrarModalPendiente()" style="width:100%; margin-top:10px;">Cancelar</button>
+  </div>
 </div>
 
 <div id="loading-overlay" class="loading-overlay hidden"><div class="loading-card"><div class="spinner"></div><p id="loading-text">Procesando...</p></div></div>
