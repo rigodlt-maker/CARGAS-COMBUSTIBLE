@@ -390,19 +390,25 @@ function abrirPendiente(id, eco, fecha, litros) {
   document.getElementById("btn-cam-pend").classList.remove("hidden");
   document.getElementById("preview-box-pend").classList.add("hidden");
   document.getElementById("btn-save-pend").style.display = "none";
-  
-  document.getElementById("pendientes-list").classList.add("hidden");
+
+  // El modal ahora es un overlay global (funciona desde Historial o Pendientes)
   document.getElementById("modal-pendiente").classList.remove("hidden");
 }
 
 function cerrarModalPendiente() {
   document.getElementById("modal-pendiente").classList.add("hidden");
-  document.getElementById("pendientes-list").classList.remove("hidden");
+}
+
+// Refresca la lista visible (Historial o Pendientes) tras cerrar un registro pendiente
+function refrescarListaActual() {
+  if (document.getElementById("content-historial").classList.contains("active")) loadHistory();
+  if (isAdmin && document.getElementById("content-pendientes").classList.contains("active")) loadPendientes();
 }
 
 async function guardarPendiente() {
   const ticketVal = document.getElementById("pend-ticket-input").value.trim();
   if(!ticketVal) return alert("Ingresa el número de ticket definitivo.");
+  if(!estadoFotos.pend) return alert("❌ Debes tomar y CONFIRMAR la foto del Ticket.");
   
   showLoading("Cerrando registro y generando PDF...");
   try {
@@ -423,9 +429,10 @@ async function guardarPendiente() {
     hideLoading();
     alert("Ticket adjuntado y PDF generado.");
     cerrarModalPendiente();
-    loadPendientes();
+    refrescarListaActual();
   } catch(e) { hideLoading(); alert("Error: " + e.message); }
 }
+
 
 /* --- HISTORIAL --- */
 async function loadHistory() {
@@ -448,12 +455,17 @@ async function loadHistory() {
       const esPendiente = d.status === "pendiente";
       const colorEstatus = esPendiente ? "var(--orange)" : "var(--green)";
       const txtEstatus = esPendiente ? "⏳ Pendiente" : "✅ Completado";
+      // Si está pendiente, la tarjeta es clickeable para subir el ticket faltante
+      const clickAttr = esPendiente
+        ? `onclick="abrirPendiente('${docSnap.id}', '${d.eco}', '${d.fecha}', ${d.litros})" style="border-left:4px solid var(--orange); cursor:pointer;"`
+        : "";
       list.innerHTML += `
-        <div class="history-card">
+        <div class="history-card" ${clickAttr}>
           <div class="hc-header"><span>${d.eco}</span><span style="color:${colorEstatus};">${txtEstatus}</span></div>
           <p style="color:var(--text-muted); font-size:12px; margin-top:5px;">
             ${d.maquinaria || ""} • ${d.litros} L • Rend: ${d.rendimiento ?? "N/A"} L/h • Ticket: ${d.ticket || "—"}
           </p>
+          ${esPendiente ? `<p style="color:var(--orange); font-size:11px; margin-top:5px;">👉 Toca para subir el ticket</p>` : ""}
         </div>
       `;
     });
