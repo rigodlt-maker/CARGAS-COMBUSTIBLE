@@ -1,9 +1,8 @@
 // =============================================
 // app.js — FuelControl PWA (todo en uno)
-// Firebase Auth + Firestore inline
 // =============================================
 
-// ---- Cargar Firebase desde CDN ----
+// ---- Cargar Firebase desde CDN (Versión Limpia) ----
 async function loadFirebase() {
   const { initializeApp }   = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js");
   const { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
@@ -11,6 +10,7 @@ async function loadFirebase() {
   const { getFirestore, collection, addDoc, getDocs, query, where, orderBy, Timestamp }
     = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
 
+  // Tu llave maestra de Firebase
   const firebaseConfig = {
     apiKey:            "AIzaSyCeIsd_BrHKbAY1HrYb3HL4vG4cpadUTuU",
     authDomain:        "cargas-7bf25.firebaseapp.com",
@@ -24,6 +24,7 @@ async function loadFirebase() {
   const auth = getAuth(app);
   const db   = getFirestore(app);
 
+  // Guardamos las herramientas para usarlas en toda la app
   window.firebaseAuth  = auth;
   window.firebaseDB    = db;
   window.fbSignIn      = signInWithEmailAndPassword;
@@ -37,7 +38,7 @@ async function loadFirebase() {
   window.fbOrderBy     = orderBy;
   window.fbTimestamp   = Timestamp;
 
-  console.log("✅ Firebase listo");
+  console.log("✅ Motor de Firebase encendido y listo");
   initAuth();
 }
 
@@ -53,25 +54,21 @@ let photoConfirmed = false;
    INIT
    ============================================ */
 document.addEventListener("DOMContentLoaded", () => {
-  // Fecha de hoy por defecto
   const today = new Date().toISOString().split("T")[0];
   const dateField = document.getElementById("f-fecha");
   if (dateField) dateField.value = today;
 
-  // Horómetro badge
   const horoInput = document.getElementById("f-horometro");
   if (horoInput) horoInput.addEventListener("input", updateHorometroBadge);
 
-  // Cargar Firebase
   loadFirebase().catch(e => {
-    console.error("Firebase error:", e);
     console.error("Error cargando Firebase:", e);
     showLoginError("Error al conectar con el servidor. Revisa tu conexión.");
   });
 });
 
 /* ============================================
-   AUTH
+   AUTH Y LISTA BLANCA
    ============================================ */
 function initAuth() {
   window.fbAuthChanged(window.firebaseAuth, async (user) => {
@@ -101,7 +98,7 @@ async function checkWhitelist(email) {
     return !snap.empty;
   } catch (e) {
     console.error("Error whitelist:", e);
-    return true;
+    return true; 
   }
 }
 
@@ -145,7 +142,6 @@ function showLoginError(msg) {
   setTimeout(() => el.classList.add("hidden"), 6000);
 }
 
-// ---- Ojito contraseña (CORREGIDO) ----
 function togglePassword() {
   const input = document.getElementById("login-password");
   input.type  = input.type === "password" ? "text" : "password";
@@ -173,7 +169,7 @@ function switchTab(name) {
 }
 
 /* ============================================
-   STEPS
+   PASOS DEL FORMULARIO
    ============================================ */
 function goStep(n) {
   if (n > currentStep && !validateStep(currentStep)) return;
@@ -229,7 +225,7 @@ function validateStep(step) {
 }
 
 /* ============================================
-   FORM HELPERS
+   LÓGICA DE CAMPOS (Maquinaria y Horómetro)
    ============================================ */
 function onMaquinariaChange() {
   const val    = document.getElementById("f-maquinaria").value;
@@ -251,10 +247,16 @@ function updateHorometroBadge() {
   const val   = document.getElementById("f-horometro").value;
   const badge = document.getElementById("horometro-badge");
   if (!val) { badge.textContent = "— h"; return; }
-  const parts = val.toString().split(".");
-  const hours = parseInt(parts[0]) || 0;
-  const frac  = parseInt(parts[1]?.[0]) || 0;
-  badge.textContent = `${hours}h ${frac * 6 > 0 ? frac * 6 + "m" : ""}`;
+  
+  // Lógica de fracciones de hora (* 6 minutos)
+  const lastDigit = parseInt(val.toString().slice(-1)) || 0;
+  const hours = Math.floor(val / 10);
+  
+  if (val.length === 1) {
+    badge.textContent = `0h ${lastDigit * 6}m`;
+  } else {
+    badge.textContent = `${hours}h ${lastDigit > 0 ? (lastDigit * 6) + "m" : ""}`;
+  }
 }
 
 function onTipoChange() {
@@ -431,7 +433,7 @@ function buildSummary() {
 }
 
 /* ============================================
-   SUBMIT
+   SUBMIT A FIREBASE (GUARDAR DATOS)
    ============================================ */
 async function handleSubmit() {
   const btn = document.getElementById("btn-submit");
@@ -512,7 +514,7 @@ function resetForm() {
 }
 
 /* ============================================
-   HISTORIAL
+   HISTORIAL Y EXPORTACIÓN
    ============================================ */
 async function loadHistory() {
   const fecha = document.getElementById("hist-fecha").value;
@@ -572,9 +574,6 @@ async function redownloadPDF(data) {
   finally { hideLoading(); }
 }
 
-/* ============================================
-   ESTADÍSTICAS
-   ============================================ */
 async function loadStats() {
   const today = new Date().toISOString().split("T")[0];
   try {
@@ -593,9 +592,6 @@ async function loadStats() {
   } catch(e) { console.warn("Stats:", e.message); }
 }
 
-/* ============================================
-   EXPORTAR CSV
-   ============================================ */
 async function exportCSV() {
   const desde = document.getElementById("exp-desde").value;
   const hasta = document.getElementById("exp-hasta").value;
@@ -623,9 +619,6 @@ async function exportCSV() {
   finally { hideLoading(); }
 }
 
-/* ============================================
-   LOADING
-   ============================================ */
 function showLoading(msg="Procesando...") {
   document.getElementById("loading-text").textContent = msg;
   document.getElementById("loading-overlay").classList.remove("hidden");
@@ -635,9 +628,7 @@ function hideLoading() {
 }
 
 /* ============================================
-   EXPONER FUNCIONES AL SCOPE GLOBAL
-   Necesario porque app.js es type="module"
-   y los onclick="" del HTML no las ven
+   EXPONER FUNCIONES AL HTML
    ============================================ */
 window.handleLogin       = handleLogin;
 window.handleLogout      = handleLogout;
