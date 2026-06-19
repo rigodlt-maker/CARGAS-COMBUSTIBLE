@@ -254,7 +254,10 @@ function validateStep(step) {
     }
     return true;
   }
-  
+
+  return true;
+}
+
 function buildSummary() {
   const isPendiente = document.getElementById("chk-ticket-despues").checked;
   const html = `
@@ -267,7 +270,7 @@ function buildSummary() {
 
 /* --- CALCULO RENDIMIENTO L/H --- */
 async function getRendimiento(ecoActual, horoRawActual, litrosActuales) {
-  if(!horoRawActual) return "N/A";
+  if(!horRawActual) return "N/A";
   try {
     const col = window.fbCollection(window.firebaseDB, "registros");
     const q = window.fbQuery(col, window.fbWhere("eco", "==", ecoActual), window.fbOrderBy("creadoEn", "desc"), window.fbLimit(1));
@@ -277,7 +280,7 @@ async function getRendimiento(ecoActual, horoRawActual, litrosActuales) {
       const prevData = snap.docs[0].data();
       if(prevData.horometroRaw) {
         // Convertir formato "10002" -> 1000.2 horas reales para matemáticas
-        const currentHoroDec = (Math.floor(horoRawActual / 10)) + ((horoRawActual % 10) / 10);
+        const currentHoroDec = (Math.floor(horRawActual / 10)) + ((horRawActual % 10) / 10);
         const prevHoroDec = (Math.floor(prevData.horometroRaw / 10)) + ((prevData.horometroRaw % 10) / 10);
         
         const horasTrabajadas = currentHoroDec - prevHoroDec;
@@ -457,7 +460,7 @@ function hideLoading() { document.getElementById("loading-overlay").classList.ad
 
 /* EXPORTACIONES PARA EL HTML */
 window.handleLogin = handleLogin;
-window.handleLogout = handleLogout;
+window.Logout = handleLogout;
 window.togglePassword = togglePassword;
 window.switchTab = switchTab;
 window.goStep = goStep;
