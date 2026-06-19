@@ -699,3 +699,4 @@ window.handleSubmit      = handleSubmit;
 window.loadHistory       = loadHistory;
 window.redownloadPDF     = redownloadPDF;
 window.exportCSV         = exportCSV;
+window.autoCompletarEquipo = autoCompletarEquipo;
