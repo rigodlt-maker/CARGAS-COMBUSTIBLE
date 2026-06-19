@@ -170,44 +170,39 @@ function toggleTicket() {
   document.getElementById("ticket-section").style.display = isChecked ? "none" : "block";
 }
 
-/* --- FOTOS SURTIDOR Y TICKET (NUEVA LOGICA) --- */
+/* --- FOTOS SURTIDOR Y TICKET (LOGICA MEJORADA) --- */
 function previewSurtidor(event, tipo) {
   const file = event.target.files[0];
   if (!file) return;
+  
   const reader = new FileReader();
   reader.onload = (e) => {
-    compressImage(e.target.result, 1000, 0.7, (dataUrl) => {
-      dataFotos[tipo] = dataUrl;
-      estadoFotos[tipo] = false; // Requiere aceptar de nuevo
+    compressImage(e.target.result, 800, 0.7, (dataUrl) => {
+      // Guardamos preview
       document.getElementById(`img-${tipo}`).src = dataUrl;
+      
+      // Ocultar botón de cámara, mostrar zona de Aceptar/Repetir
       document.getElementById(`preview-box-${tipo}`).classList.remove("hidden");
       document.getElementById(`btn-cam-${tipo}`).classList.add("hidden");
-      document.getElementById(`ok-${tipo}`).classList.add("hidden");
-      if (tipo === 'pend') document.getElementById("btn-save-pend").style.display = "none";
+      document.getElementById(`ok-${tipo}`).classList.add("hidden"); // Ocultar palomita si se reintenta
+      
+      // Guardamos la foto en temporal (pero NO la marcamos como confirmada aún)
+      window[`_pending_${tipo}`] = dataUrl;
     });
   };
   reader.readAsDataURL(file);
-  event.target.value = "";
 }
 
 function aceptarSurtidor(tipo) {
-  estadoFotos[tipo] = true;
+  if (!window[`_pending_${tipo}`]) return;
+  
+  dataFotos[tipo] = window[`_pending_${tipo}`]; // Ahora sí la guardamos
+  estadoFotos[tipo] = true; // MARCAMOS COMO SUBIDA CORRECTA
+  
+  // UI: Ocultar todo y mostrar palomita
   document.getElementById(`preview-box-${tipo}`).classList.add("hidden");
-  document.getElementById(`ok-${tipo}`).classList.remove("hidden");
-  if (tipo === 'pend') document.getElementById("btn-save-pend").style.display = "block";
-}
-
-function compressImage(dataUrl, maxWidth, quality, callback) {
-  const img = new Image();
-  img.onload = () => {
-    const canvas = document.createElement("canvas");
-    let w = img.width, h = img.height;
-    if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
-    canvas.width = w; canvas.height = h;
-    canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-    callback(canvas.toDataURL("image/jpeg", quality));
-  };
-  img.src = dataUrl;
+  document.getElementById(`btn-cam-${tipo}`).classList.remove("hidden");
+  document.getElementById(`ok-${tipo}`).classList.remove("hidden"); // AQUÍ APARECE LA PALOMITA
 }
 
 /* --- NAVEGACION Y VALIDACION --- */
