@@ -632,3 +632,28 @@ function showLoading(msg="Procesando...") {
 function hideLoading() {
   document.getElementById("loading-overlay").classList.add("hidden");
 }
+
+/* ============================================
+   EXPONER FUNCIONES AL SCOPE GLOBAL
+   Necesario porque app.js es type="module"
+   y los onclick="" del HTML no las ven
+   ============================================ */
+window.handleLogin       = handleLogin;
+window.handleLogout      = handleLogout;
+window.togglePassword    = togglePassword;
+window.switchTab         = switchTab;
+window.goStep            = goStep;
+window.onMaquinariaChange= onMaquinariaChange;
+window.toggleHorometro   = toggleHorometro;
+window.onTipoChange      = onTipoChange;
+window.onLitrosChange    = onLitrosChange;
+window.validateCuentaInicial = validateCuentaInicial;
+window.triggerCamera     = triggerCamera;
+window.onPhotoCapture    = onPhotoCapture;
+window.confirmPhoto      = confirmPhoto;
+window.repeatPhoto       = repeatPhoto;
+window.removePhoto       = removePhoto;
+window.handleSubmit      = handleSubmit;
+window.loadHistory       = loadHistory;
+window.redownloadPDF     = redownloadPDF;
+window.exportCSV         = exportCSV;
