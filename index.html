@@ -126,25 +126,28 @@
           <input type="date" id="f-fecha" class="field-input" />
         </div>
 
+        <!-- SECCIÓN DE MAQUINARIA AUTORELLENABLE -->
         <div class="field-group">
-          <label class="field-label">Maquinaria <span class="req">*</span></label>
-          <select id="f-maquinaria" class="field-input" onchange="onMaquinariaChange()">
-            <option value="">— Seleccionar —</option>
-            <option value="Excavadora CAT 336">Excavadora CAT 336</option>
-            <option value="Excavadora CAT 323">Excavadora CAT 323</option>
-            <option value="Bulldozer CAT D6">Bulldozer CAT D6</option>
-            <option value="Compactadora">Compactadora</option>
-            <option value="Grúa telescópica">Grúa telescópica</option>
-            <option value="Camión Volteo">Camión Volteo</option>
-            <option value="Camioneta pickup">Camioneta pickup</option>
-            <option value="Planta de luz">Planta de luz</option>
-            <option value="Otro">Otro...</option>
+          <label class="field-label"># Económico (ECO) <span class="req">*</span></label>
+          <select id="f-eco" class="field-input" onchange="autoCompletarEquipo()">
+            <option value="">Selecciona el # ECO...</option>
           </select>
         </div>
 
-        <div class="field-group" id="group-eco">
-          <label class="field-label"># ECO Interno <span class="req">*</span></label>
-          <input type="text" id="f-eco" class="field-input" placeholder="Ej. ECO-042" autocomplete="off" />
+        <div class="field-group">
+          <label class="field-label">Maquinaria <span class="req">*</span></label>
+          <input type="text" id="f-maquinaria" class="field-input" readonly style="background-color: var(--bg-elevated);" />
+        </div>
+
+        <div class="field-group" style="display: flex; gap: 10px;">
+          <div style="flex: 1;">
+            <label class="field-label">Marca</label>
+            <input type="text" id="f-marca" class="field-input" readonly style="background-color: var(--bg-elevated);" />
+          </div>
+          <div style="flex: 1;">
+            <label class="field-label">Modelo</label>
+            <input type="text" id="f-modelo" class="field-input" readonly style="background-color: var(--bg-elevated);" />
+          </div>
         </div>
 
         <div class="field-group" id="group-horometro">
