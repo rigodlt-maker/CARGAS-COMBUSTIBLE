@@ -10,7 +10,6 @@ async function loadFirebase() {
   const { getFirestore, collection, addDoc, getDocs, query, where, orderBy, Timestamp }
     = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
 
-  // Tu llave maestra de Firebase
   const firebaseConfig = {
     apiKey:            "AIzaSyCeIsd_BrHKbAY1HrYb3HL4vG4cpadUTuU",
     authDomain:        "cargas-7bf25.firebaseapp.com",
@@ -24,7 +23,6 @@ async function loadFirebase() {
   const auth = getAuth(app);
   const db   = getFirestore(app);
 
-  // Guardamos las herramientas para usarlas en toda la app
   window.firebaseAuth  = auth;
   window.firebaseDB    = db;
   window.fbSignIn      = signInWithEmailAndPassword;
@@ -43,12 +41,16 @@ async function loadFirebase() {
 }
 
 /* ============================================
-   ESTADO GLOBAL
+   ESTADO GLOBAL Y VARIABLES FOTOGRÁFICAS
    ============================================ */
 let currentUser    = null;
 let currentStep    = 1;
-let capturedPhotos = [];
+let capturedPhotos = []; // Para ticket(s)
 let photoConfirmed = false;
+
+// NUEVO: Variables para guardar temporalmente las fotos de los surtidores
+let fotoCuentaInicial = null;
+let fotoCuentaFinal   = null;
 
 /* ============================================
    CATÁLOGO DE MAQUINARIA
@@ -89,7 +91,7 @@ function autoCompletarEquipo() {
     document.getElementById("f-maquinaria").value = equipo.maquinaria;
     document.getElementById("f-marca").value = equipo.marca;
     document.getElementById("f-modelo").value = equipo.modelo;
-    onMaquinariaChange(); // Verifica si es equipo sin horómetro
+    onMaquinariaChange();
   } else {
     document.getElementById("f-maquinaria").value = "";
     document.getElementById("f-marca").value = "";
@@ -100,7 +102,6 @@ function autoCompletarEquipo() {
 /* ============================================
    INIT
    ============================================ */
-// Ejecutamos la carga de equipos directamente (sin esperar al DOM porque ya es un módulo)
 cargarSelectorEquipos(); 
 
 const today = new Date().toISOString().split("T")[0];
@@ -114,7 +115,6 @@ loadFirebase().catch(e => {
   console.error("Error cargando Firebase:", e);
   showLoginError("Error al conectar con el servidor. Revisa tu conexión.");
 });
-
 
 /* ============================================
    AUTH Y LISTA BLANCA
@@ -145,10 +145,7 @@ async function checkWhitelist(email) {
     const q    = window.fbQuery(col, window.fbWhere("email", "==", email.toLowerCase()));
     const snap = await window.fbGetDocs(q);
     return !snap.empty;
-  } catch (e) {
-    console.error("Error whitelist:", e);
-    return true; 
-  }
+  } catch (e) { return true; }
 }
 
 async function handleLogin() {
@@ -157,7 +154,7 @@ async function handleLogin() {
   const btn   = document.getElementById("btn-login");
 
   if (!email || !pw) { showLoginError("Ingresa correo y contraseña."); return; }
-  if (!window.fbSignIn) { showLoginError("Conectando con el servidor, espera un momento..."); return; }
+  if (!window.fbSignIn) { showLoginError("Conectando con el servidor..."); return; }
 
   btn.disabled = true;
   btn.querySelector(".btn-label").textContent = "Verificando...";
@@ -165,14 +162,7 @@ async function handleLogin() {
   try {
     await window.fbSignIn(window.firebaseAuth, email, pw);
   } catch (e) {
-    const msgs = {
-      "auth/user-not-found":     "Correo no registrado.",
-      "auth/wrong-password":     "Contraseña incorrecta.",
-      "auth/invalid-email":      "Formato de correo inválido.",
-      "auth/too-many-requests":  "Demasiados intentos. Intenta más tarde.",
-      "auth/invalid-credential": "Credenciales incorrectas."
-    };
-    showLoginError(msgs[e.code] || `Error: ${e.message}`);
+    showLoginError(`Error: ${e.message}`);
   } finally {
     btn.disabled = false;
     btn.querySelector(".btn-label").textContent = "Ingresar";
@@ -218,7 +208,7 @@ function switchTab(name) {
 }
 
 /* ============================================
-   PASOS DEL FORMULARIO
+   PASOS DEL FORMULARIO Y VALIDACIÓN
    ============================================ */
 function goStep(n) {
   if (n > currentStep && !validateStep(currentStep)) return;
@@ -247,8 +237,7 @@ function goStep(n) {
 function validateStep(step) {
   if (step === 1) {
     if (!document.getElementById("f-fecha").value)      { alert("Selecciona la fecha de carga.");       return false; }
-    if (!document.getElementById("f-maquinaria").value) { alert("Selecciona la maquinaria.");           return false; }
-    if (!document.getElementById("f-eco").value.trim()) { alert("Ingresa el # ECO Interno.");           return false; }
+    if (!document.getElementById("f-eco").value.trim()) { alert("Selecciona el # ECO Interno.");           return false; }
     const sinHoro = document.getElementById("chk-sin-horometro").checked;
     if (!sinHoro && !document.getElementById("f-horometro").value) {
       alert("Ingresa el horómetro o marca 'Sin horómetro'."); return false;
@@ -258,16 +247,20 @@ function validateStep(step) {
     const tipo = document.querySelector('input[name="tipo-combustible"]:checked');
     if (!tipo)                                             { alert("Selecciona el tipo de combustible."); return false; }
     if (!document.getElementById("f-litros").value)       { alert("Ingresa los litros cargados.");       return false; }
+    
     const ci = parseFloat(document.getElementById("f-cuenta-inicial").value);
     if (document.getElementById("f-cuenta-inicial").value === "" || isNaN(ci)) {
       alert("Ingresa la cuenta litros inicial."); return false;
     }
-    if (ci !== 0)                                          { alert("La cuenta litros inicial debe ser 0."); return false; }
     if (!document.getElementById("f-cuenta-final").value) { alert("Ingresa la cuenta litros final.");    return false; }
+    
+    // NUEVO: Validación de fotos obligatorias
+    if (!fotoCuentaInicial) { alert("Falta la fotografía del Cuenta Litros INICIAL."); return false; }
+    if (!fotoCuentaFinal)   { alert("Falta la fotografía del Cuenta Litros FINAL."); return false; }
   }
   if (step === 3) {
     if (!document.getElementById("f-ticket").value.trim()) { alert("Ingresa el # de ticket.");          return false; }
-    if (capturedPhotos.length === 0)                        { alert("Captura al menos una foto.");       return false; }
+    if (capturedPhotos.length === 0)                        { alert("Captura la foto del ticket.");       return false; }
     if (!photoConfirmed)                                    { alert("Confirma la foto del ticket.");     return false; }
   }
   return true;
@@ -297,7 +290,6 @@ function updateHorometroBadge() {
   const badge = document.getElementById("horometro-badge");
   if (!val) { badge.textContent = "— h"; return; }
   
-  // Lógica de fracciones de hora (* 6 minutos)
   const lastDigit = parseInt(val.toString().slice(-1)) || 0;
   const hours = Math.floor(val / 10);
   
@@ -332,8 +324,32 @@ function validateCuentaInicial() {
 }
 
 /* ============================================
-   CÁMARA Y FOTOS
+   CÁMARA Y FOTOS (NUEVO)
    ============================================ */
+
+// Función para procesar las fotos de los surtidores
+function capturarFotoCuenta(event, tipo) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    compressImage(e.target.result, 800, 0.7, (dataUrl) => {
+      if (tipo === 'inicial') {
+        const img = document.getElementById('preview-inicial');
+        img.src = dataUrl;
+        img.classList.remove('hidden');
+        fotoCuentaInicial = dataUrl;
+      } else if (tipo === 'final') {
+        const img = document.getElementById('preview-final');
+        img.src = dataUrl;
+        img.classList.remove('hidden');
+        fotoCuentaFinal = dataUrl;
+      }
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
 function triggerCamera() {
   document.getElementById("file-ticket").click();
 }
@@ -468,7 +484,7 @@ function buildSummary() {
     ["Litros cargados", `${litros.toFixed(2)} L`, "highlight"],
     ["Cta. Inicial",    document.getElementById("f-cuenta-inicial").value || "0"],
     ["Cta. Final",      document.getElementById("f-cuenta-final").value || "—"],
-    ["Fotos",           `${capturedPhotos.length} capturada(s)`],
+    ["Fotos subidas",   `${capturedPhotos.length + 2} capturada(s)`], // Ticket(s) + 2 de surtidor
   ];
 
   document.getElementById("summary-card").innerHTML = rows.map(([k, v, type]) => {
@@ -501,13 +517,19 @@ async function handleSubmit() {
     const sinHoro    = document.getElementById("chk-sin-horometro").checked;
     const horo       = sinHoro ? null : document.getElementById("f-horometro").value;
 
+    // UNIR TODAS LAS FOTOS: Inicial, Final y Ticket(s)
+    const todasLasFotos = [];
+    if (fotoCuentaInicial) todasLasFotos.push({ dataUrl: fotoCuentaInicial });
+    if (fotoCuentaFinal) todasLasFotos.push({ dataUrl: fotoCuentaFinal });
+    capturedPhotos.forEach(p => todasLasFotos.push(p));
+
     const record = {
       fecha, eco, maquinaria, ticket, tipo, litros,
       cuentaInicial: cuentaIni,
       cuentaFinal:   cuentaFin,
       horometro:     horo,
       sinHorometro:  sinHoro,
-      fotos:         capturedPhotos.map(p => p.dataUrl),
+      fotos:         todasLasFotos.map(p => p.dataUrl),
       usuario:       currentUser.email,
       creadoEn:      window.fbTimestamp.now(),
     };
@@ -518,7 +540,7 @@ async function handleSubmit() {
     const meta = { ticket, eco, fecha, maquinaria, tipo,
                    litros: litros.toFixed(2), horometro: horo || "N/A",
                    usuario: currentUser.email };
-    const doc = await generateTicketPDF(capturedPhotos, meta);
+    const doc = await generateTicketPDF(todasLasFotos, meta);
     doc.save(`FuelControl_${eco}_${ticket}_${fecha}.pdf`);
 
     hideLoading();
@@ -541,9 +563,14 @@ async function handleSubmit() {
 
 function resetForm() {
   capturedPhotos = []; photoConfirmed = false; window._pendingPhoto = null;
+  fotoCuentaInicial = null; fotoCuentaFinal = null; // Limpiar fotos nuevas
+  
   ["f-fecha","f-eco","f-horometro","f-ticket","f-litros","f-cuenta-inicial","f-cuenta-final"]
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+    
   document.getElementById("f-maquinaria").value = "";
+  document.getElementById("f-marca").value = "";
+  document.getElementById("f-modelo").value = "";
   document.querySelectorAll('input[name="tipo-combustible"]').forEach(r => r.checked = false);
   document.getElementById("chk-sin-horometro").checked  = false;
   document.getElementById("f-horometro").disabled       = false;
@@ -558,6 +585,13 @@ function resetForm() {
   document.getElementById("camera-preview").classList.add("hidden");
   document.getElementById("ci-badge").classList.add("hidden");
   document.getElementById("ci-warning").classList.add("hidden");
+  
+  // Limpiar previews de fotos de surtidor
+  document.getElementById("preview-inicial").classList.add("hidden");
+  document.getElementById("preview-inicial").src = "";
+  document.getElementById("preview-final").classList.add("hidden");
+  document.getElementById("preview-final").src = "";
+
   document.getElementById("f-fecha").value = new Date().toISOString().split("T")[0];
   goStep(1);
 }
@@ -699,3 +733,4 @@ window.loadHistory       = loadHistory;
 window.redownloadPDF     = redownloadPDF;
 window.exportCSV         = exportCSV;
 window.autoCompletarEquipo = autoCompletarEquipo;
+window.capturarFotoCuenta  = capturarFotoCuenta; // Exponemos la nueva función
