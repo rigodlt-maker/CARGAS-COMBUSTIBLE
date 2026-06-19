@@ -66,6 +66,7 @@ const catalogoEquipos = [
 /* --- INIT --- */
 cargarSelectorEquipos();
 document.getElementById("f-fecha").value = new Date().toISOString().split("T")[0];
+document.getElementById("hist-fecha").value = new Date().toISOString().split("T")[0];
 document.getElementById("f-horometro").addEventListener("input", updateHorometroBadge);
 loadFirebase();
 
@@ -170,6 +171,26 @@ function toggleTicket() {
   document.getElementById("ticket-section").style.display = isChecked ? "none" : "block";
 }
 
+/* --- COMPRESIÓN DE IMÁGENES (faltaba esta función) --- */
+function compressImage(dataUrl, maxWidth, quality, callback) {
+  const img = new Image();
+  img.onload = () => {
+    let { width, height } = img;
+    if (width > maxWidth) {
+      height = Math.round((height * maxWidth) / width);
+      width = maxWidth;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+    callback(canvas.toDataURL("image/jpeg", quality));
+  };
+  // Si la imagen falla al cargar, no bloqueamos el flujo: usamos el original
+  img.onerror = () => callback(dataUrl);
+  img.src = dataUrl;
+}
+
 /* --- FOTOS SURTIDOR Y TICKET (LOGICA MEJORADA) --- */
 function previewSurtidor(event, tipo) {
   const file = event.target.files[0];
@@ -270,7 +291,7 @@ function buildSummary() {
 
 /* --- CALCULO RENDIMIENTO L/H --- */
 async function getRendimiento(ecoActual, horoRawActual, litrosActuales) {
-  if(!horRawActual) return "N/A";
+  if(!horoRawActual) return "N/A";
   try {
     const col = window.fbCollection(window.firebaseDB, "registros");
     const q = window.fbQuery(col, window.fbWhere("eco", "==", ecoActual), window.fbOrderBy("creadoEn", "desc"), window.fbLimit(1));
@@ -280,7 +301,7 @@ async function getRendimiento(ecoActual, horoRawActual, litrosActuales) {
       const prevData = snap.docs[0].data();
       if(prevData.horometroRaw) {
         // Convertir formato "10002" -> 1000.2 horas reales para matemáticas
-        const currentHoroDec = (Math.floor(horRawActual / 10)) + ((horRawActual % 10) / 10);
+        const currentHoroDec = (Math.floor(horoRawActual / 10)) + ((horoRawActual % 10) / 10);
         const prevHoroDec = (Math.floor(prevData.horometroRaw / 10)) + ((prevData.horometroRaw % 10) / 10);
         
         const horasTrabajadas = currentHoroDec - prevHoroDec;
@@ -406,6 +427,88 @@ async function guardarPendiente() {
   } catch(e) { hideLoading(); alert("Error: " + e.message); }
 }
 
+/* --- HISTORIAL --- */
+async function loadHistory() {
+  const list = document.getElementById("history-list");
+  const fechaInput = document.getElementById("hist-fecha");
+  if (!fechaInput.value) fechaInput.value = new Date().toISOString().split("T")[0];
+  const fecha = fechaInput.value;
+
+  list.innerHTML = "Cargando...";
+  try {
+    const col = window.fbCollection(window.firebaseDB, "registros");
+    const q = window.fbQuery(col, window.fbWhere("fecha", "==", fecha));
+    const snap = await window.fbGetDocs(q);
+
+    if (snap.empty) { list.innerHTML = "<p>No hay registros para esta fecha.</p>"; return; }
+
+    list.innerHTML = "";
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      const esPendiente = d.status === "pendiente";
+      const colorEstatus = esPendiente ? "var(--orange)" : "var(--green)";
+      const txtEstatus = esPendiente ? "⏳ Pendiente" : "✅ Completado";
+      list.innerHTML += `
+        <div class="history-card">
+          <div class="hc-header"><span>${d.eco}</span><span style="color:${colorEstatus};">${txtEstatus}</span></div>
+          <p style="color:var(--text-muted); font-size:12px; margin-top:5px;">
+            ${d.maquinaria || ""} • ${d.litros} L • Rend: ${d.rendimiento ?? "N/A"} L/h • Ticket: ${d.ticket || "—"}
+          </p>
+        </div>
+      `;
+    });
+  } catch (e) {
+    list.innerHTML = `<p>Error al cargar historial: ${e.message}</p>`;
+  }
+}
+
+/* --- EXPORTAR CSV --- */
+async function exportCSV() {
+  showLoading("Generando CSV...");
+  try {
+    const col = window.fbCollection(window.firebaseDB, "registros");
+    const snap = await window.fbGetDocs(col);
+
+    if (snap.empty) { hideLoading(); alert("No hay registros para exportar."); return; }
+
+    const headers = ["Fecha", "ECO", "Maquinaria", "Litros", "Horometro", "Rendimiento(L/h)", "Ticket", "Estatus", "Usuario"];
+    const rows = [headers.join(",")];
+
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      const fila = [
+        d.fecha || "",
+        d.eco || "",
+        `"${(d.maquinaria || "").replace(/"/g, '""')}"`,
+        d.litros ?? "",
+        d.horometroRaw ?? "",
+        d.rendimiento ?? "",
+        d.ticket || "",
+        d.status || "",
+        d.usuario || ""
+      ];
+      rows.push(fila.join(","));
+    });
+
+    const csvContent = rows.join("\n");
+    // \uFEFF (BOM) para que Excel detecte UTF-8 y los acentos no se rompan
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `FuelControl_Export_${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    hideLoading();
+  } catch (e) {
+    hideLoading();
+    alert("Error al exportar: " + e.message);
+  }
+}
+
 /* --- GENERAR PDF MAESTRO CON 3 FOTOS Y RENDIMIENTO --- */
 async function generateTicketPDF(record) {
   if (!window.jspdf) {
@@ -460,7 +563,7 @@ function hideLoading() { document.getElementById("loading-overlay").classList.ad
 
 /* EXPORTACIONES PARA EL HTML */
 window.handleLogin = handleLogin;
-window.Logout = handleLogout;
+window.handleLogout = handleLogout;
 window.togglePassword = togglePassword;
 window.switchTab = switchTab;
 window.goStep = goStep;
@@ -473,3 +576,5 @@ window.handleSubmit = handleSubmit;
 window.abrirPendiente = abrirPendiente;
 window.cerrarModalPendiente = cerrarModalPendiente;
 window.guardarPendiente = guardarPendiente;
+window.loadHistory = loadHistory;
+window.exportCSV = exportCSV;
