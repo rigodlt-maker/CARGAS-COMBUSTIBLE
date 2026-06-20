@@ -2,13 +2,13 @@
 // IMPORTANTE: sube este número (v2, v3, v4...) CADA VEZ que publiques cambios
 // en index.html / app.js / style.css. Si no lo subes, los navegadores que ya
 // tengan la app instalada pueden tardar en notar que hay una versión nueva.
-const CACHE_NAME = "fuelcontrol-v2";
+const CACHE_NAME = "fuelcontrol-v3";
 
 const STATIC_ASSETS = [
-  "/index.html",
-  "/style.css",
-  "/app.js",
-  "/manifest.json",
+  "./index.html",
+  "./style.css",
+  "./app.js",
+  "./manifest.json",
   "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Mono&display=swap"
 ];
 
