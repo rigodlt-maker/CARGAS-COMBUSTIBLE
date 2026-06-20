@@ -34,7 +34,6 @@ async function loadFirebase() {
   const { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js");
   // Añadimos limit, doc y updateDoc para las nuevas funciones
   const { getFirestore, collection, addDoc, getDocs, query, where, orderBy, Timestamp, limit, doc, updateDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
-const { getStorage, ref, uploadString } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js");
   const firebaseConfig = {
     apiKey:            "AIzaSyCeIsd_BrHKbAY1HrYb3HL4vG4cpadUTuU",
     authDomain:        "cargas-7bf25.firebaseapp.com",
@@ -61,9 +60,6 @@ const { getStorage, ref, uploadString } = await import("https://www.gstatic.com/
   window.fbDoc        = doc;
   window.fbUpdateDoc  = updateDoc;
   window.fbSetDoc     = setDoc;
-  window.firebaseStorage = getStorage(app);
-window.fbStorageRef     = ref;
-window.fbUploadString   = uploadString;
 
   initAuth();
 }
@@ -403,9 +399,6 @@ async function handleSubmit() {
       const pdfDoc = await generateTicketPDF(record);
       pdfDoc.save(`FuelControl_${eco}_${record.ticket}.pdf`);
 
-      const pdfPath = `${record.fecha}/${eco}/${docRef.id}.pdf`;
-      await window.fbUploadString(window.fbStorageRef(window.firebaseStorage, pdfPath), pdfDoc.output("datauristring"), "data_url");
-      record.pdfPath = pdfPath;
     }
 
     await window.fbSetDoc(docRef, record);
