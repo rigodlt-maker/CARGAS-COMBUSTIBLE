@@ -433,6 +433,9 @@ async function loadPendientes() {
           <div class="history-card" style="border-left: 4px solid var(--blue); cursor:default;">
             <div class="hc-header"><span>${d.eco}</span><span>${d.fecha}</span></div>
             <p style="color:var(--blue); font-size:12px; margin-top:5px;">🔒 Conciliado sin ticket • ${d.litros} L</p>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button class="btn btn-outline btn-sm" onclick="descargarPDFDesdeCache('${docSnap.id}')">📥 Descargar PDF</button>
+            </div>
           </div>
         `;
       } else {
@@ -440,6 +443,9 @@ async function loadPendientes() {
           <div class="history-card" style="border-left: 4px solid var(--orange); cursor:pointer;" onclick="abrirPendiente('${docSnap.id}')">
             <div class="hc-header"><span>${d.eco}</span><span>${d.fecha}</span></div>
             <p style="color:var(--orange); font-size:12px; margin-top:5px;">Falta Ticket • ${d.litros} L</p>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); descargarPDFDesdeCache('${docSnap.id}')">📥 Descargar PDF</button>
+            </div>
           </div>
         `;
       }
@@ -602,7 +608,7 @@ async function loadHistory() {
       const colorEstatus = esConciliado ? "var(--blue)" : (esPendiente ? "var(--orange)" : "var(--green)");
       const txtEstatus = esConciliado ? "🔒 Conciliado" : (esPendiente ? "⏳ Pendiente" : "✅ Completado");
 
-      let botones = "";
+      let botones = `<button class="btn btn-outline btn-sm" onclick="descargarPDFDesdeCache('${docSnap.id}')">📥 Descargar PDF</button>`;
       if (!esConciliado) {
         if (esPendiente) {
           botones += `<button class="btn btn-outline btn-sm" onclick="abrirPendiente('${docSnap.id}')">📷 Subir Ticket</button>`;
@@ -814,13 +820,37 @@ async function generateTicketPDF(record) {
     { label: "Bomba (Final)",   data: record.fotoFinal,   x: margin + halfW + gap }
   ];
 
+  // Placeholder reutilizable para cuando una foto no existe (registro viejo,
+  // pendiente sin cerrar, error de carga, etc.) — así el PDF nunca truena.
+  function dibujarPlaceholder(x, yPos, w, h, texto) {
+    doc.setDrawColor(210, 210, 210);
+    doc.setFillColor(245, 245, 245);
+    doc.rect(x, yPos, w, h, "FD");
+    doc.setTextColor(150, 150, 150); doc.setFontSize(9); doc.setFont("helvetica", "italic");
+    doc.text(texto, x + w / 2, yPos + h / 2, { align: "center" });
+  }
+
   let maxBottomY = y;
   fotosTop.forEach(f => {
-    if (!f.data) return;
     doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
     doc.text(f.label, f.x, y - 0.06);
 
-    const props = doc.getImageProperties(f.data);
+    if (!f.data) {
+      const hPlaceholder = 2.2;
+      dibujarPlaceholder(f.x, y, halfW, hPlaceholder, "Foto no disponible");
+      maxBottomY = Math.max(maxBottomY, y + hPlaceholder);
+      return;
+    }
+
+    let props;
+    try { props = doc.getImageProperties(f.data); }
+    catch (err) {
+      const hPlaceholder = 2.2;
+      dibujarPlaceholder(f.x, y, halfW, hPlaceholder, "Foto inválida o corrupta");
+      maxBottomY = Math.max(maxBottomY, y + hPlaceholder);
+      return;
+    }
+
     let w = halfW, h = (props.height * w) / props.width;
     if (h > maxHTop) { h = maxHTop; w = (props.width * h) / props.height; }
 
@@ -828,18 +858,27 @@ async function generateTicketPDF(record) {
     maxBottomY = Math.max(maxBottomY, y + h);
   });
 
+  const yTicket = maxBottomY + 0.4;
+  doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
+  doc.text("Ticket de Carga", margin, yTicket - 0.06);
+
   if (record.fotoTicket) {
-    const yTicket = maxBottomY + 0.4;
-    doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
-    doc.text("Ticket de Carga", margin, yTicket - 0.06);
+    let props;
+    try { props = doc.getImageProperties(record.fotoTicket); }
+    catch (err) { props = null; }
 
-    const props = doc.getImageProperties(record.fotoTicket);
-    const maxHTicket = pageH - margin - yTicket;
-    let w = contentW, h = (props.height * w) / props.width;
-    if (h > maxHTicket) { h = maxHTicket; w = (props.width * h) / props.height; }
-
-    const xTicket = margin + (contentW - w) / 2;
-    doc.addImage(record.fotoTicket, "JPEG", xTicket, yTicket, w, h);
+    if (props) {
+      const maxHTicket = pageH - margin - yTicket;
+      let w = contentW, h = (props.height * w) / props.width;
+      if (h > maxHTicket) { h = maxHTicket; w = (props.width * h) / props.height; }
+      const xTicket = margin + (contentW - w) / 2;
+      doc.addImage(record.fotoTicket, "JPEG", xTicket, yTicket, w, h);
+    } else {
+      dibujarPlaceholder(margin, yTicket, contentW, 1.5, "Foto de ticket inválida o corrupta");
+    }
+  } else {
+    const texto = record.status === "pendiente" ? "Ticket aún pendiente de adjuntar" : "Foto de ticket no disponible";
+    dibujarPlaceholder(margin, yTicket, contentW, 1.5, texto);
   }
 
   return doc;
@@ -849,27 +888,38 @@ function showLoading(msg="Procesando...") { document.getElementById("loading-tex
 function hideLoading() { document.getElementById("loading-overlay").classList.add("hidden"); }
 
 // --- FUNCIÓN PARA RE-GENERAR Y DESCARGAR PDF DESDE LA SESIÓN MASTER ---
-function forceDownloadPDF(record) {
+async function forceDownloadPDF(record) {
+  if (!record) { alert("❌ No se encontró el registro para generar el PDF."); return; }
   try {
     showLoading("Generando PDF de respaldo...");
-    
-    // Verificamos si la librería jsPDF está cargada
-    if (typeof jspdf === 'undefined' && typeof jsPDF === 'undefined') {
-      throw new Error("Librería PDF no disponible en este momento.");
-    }
 
-    // Llamamos a tu función existente que fabrica el PDF
-    const pdfDoc = generateTicketPDF(record);
-    
-    // Descargamos el archivo con el nombre estándar
-    pdfDoc.save(`FuelControl_${record.eco}_${record.ticket}.pdf`);
-    
+    // generateTicketPDF es async (puede tener que cargar jsPDF primero),
+    // así que hay que esperarla. Antes esto regresaba una Promise en vez
+    // del documento y pdfDoc.save() tronaba silenciosamente.
+    const pdfDoc = await generateTicketPDF(record);
+
+    const ecoSafe = (record.eco || "SIN-ECO").toString().replace(/[\\/:*?"<>|]/g, "-");
+    const ticketSafe = (record.ticket && record.ticket !== "PENDIENTE")
+      ? record.ticket.toString().replace(/[\\/:*?"<>|]/g, "-")
+      : "SIN-TICKET";
+
+    pdfDoc.save(`FuelControl_${ecoSafe}_${ticketSafe}.pdf`);
+
     hideLoading();
-    alert("PDF descargado exitosamente.");
   } catch (error) {
     hideLoading();
     alert("❌ Error al generar el PDF: " + error.message);
   }
+}
+
+/* --- DESCARGAR PDF DESDE LAS LISTAS (Historial / Pendientes) ---
+   Recupera el registro completo desde la caché que ya llenan loadHistory()
+   y loadPendientes(), y dispara la descarga. Así el botón en cada tarjeta
+   solo necesita pasar el id del documento, no todo el objeto. */
+function descargarPDFDesdeCache(id) {
+  const d = _getRegistroCache(id);
+  if (!d) { alert("❌ No se encontró el registro en caché. Recarga la lista e intenta de nuevo."); return; }
+  forceDownloadPDF(d);
 }
 
 
@@ -899,3 +949,6 @@ window.conciliarRegistro = conciliarRegistro;
 window.abrirUsuario = abrirUsuario;
 window.cerrarModalUsuario = cerrarModalUsuario;
 window.guardarUsuario = guardarUsuario;
+window.forceDownloadPDF = forceDownloadPDF;
+window.descargarPDFDesdeCache = descargarPDFDesdeCache;
+window.loadPendientes = loadPendientes;
