@@ -1,5 +1,5 @@
 // =============================================
-// app.js — FuelControl PWA (Actualizado L/h y Pendientes)
+// app.js — FuelControl PWA (Actualizado con Login por Alias)
 // =============================================
 
 /* --- REGISTRO DEL SERVICE WORKER (requisito para poder "Instalar app") --- */
@@ -32,7 +32,6 @@ window.addEventListener("appinstalled", () => {
 async function loadFirebase() {
   const { initializeApp }   = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js");
   const { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js");
-  // FIX: Se agrega getDoc para lectura directa por ID (evita el query __name__ inválido)
   const { getFirestore, collection, addDoc, getDocs, getDoc, query, where, orderBy, Timestamp, limit, doc, updateDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
 
   const firebaseConfig = {
@@ -53,7 +52,7 @@ async function loadFirebase() {
   window.fbCollection = collection;
   window.fbAddDoc     = addDoc;
   window.fbGetDocs    = getDocs;
-  window.fbGetDoc     = getDoc;       // FIX: expuesto para lectura directa por ID
+  window.fbGetDoc     = getDoc;       
   window.fbQuery      = query;
   window.fbWhere      = where;
   window.fbOrderBy    = orderBy;
@@ -137,12 +136,18 @@ function initAuth() {
     if (user) {
       const authData = await checkWhitelist(user.email);
       if (!authData.allowed) {
-        showLoginError("Correo no autorizado.");
+        showLoginError("Usuario no autorizado o inactivo.");
         await window.fbSignOut(window.firebaseAuth);
         return;
       }
       currentUser = user;
-      document.getElementById("header-user").textContent = user.email;
+      
+      // Mostrar solo el alias en la barra superior
+      let displayUser = user.email;
+      if(displayUser.endsWith("@rompeolas.app")) {
+        displayUser = displayUser.replace("@rompeolas.app", "");
+      }
+      document.getElementById("header-user").textContent = displayUser;
 
       isAdmin = (authData.rol === 'admin' || authData.rol === 'master');
       isMaster = (authData.rol === 'master');
@@ -169,12 +174,19 @@ async function checkWhitelist(email) {
 }
 
 async function handleLogin() {
-  const email = document.getElementById("login-email").value.trim();
+  // Ahora capturamos el alias (ej. operador1)
+  const username = document.getElementById("login-username").value.trim().toLowerCase();
   const pw = document.getElementById("login-password").value;
-  if(!email || !pw) return showLoginError("Ingresa datos");
-  try { await window.fbSignIn(window.firebaseAuth, email, pw); }
-  catch(e) { showLoginError("Error de credenciales"); }
+  
+  if(!username || !pw) return showLoginError("Ingresa usuario y contraseña.");
+  
+  // Le agregamos el dominio ficticio por detrás
+  const fakeEmail = `${username}@rompeolas.app`;
+
+  try { await window.fbSignIn(window.firebaseAuth, fakeEmail, pw); }
+  catch(e) { showLoginError("Usuario o contraseña incorrectos."); }
 }
+
 async function handleLogout() { await window.fbSignOut(window.firebaseAuth); location.reload(); }
 function showLoginError(msg) { document.getElementById("login-error").textContent = msg; document.getElementById("login-error").classList.remove("hidden"); }
 function togglePassword() { const p = document.getElementById("login-password"); p.type = p.type==="password"?"text":"password"; }
@@ -391,7 +403,6 @@ function _getRegistroCache(id) {
 }
 
 /* --- PENDIENTES (ADMIN) --- */
-// FIX: Se agrega try/catch para mostrar error real en lugar de quedarse en "Cargando..."
 async function loadPendientes() {
   const list = document.getElementById("pendientes-list");
   list.innerHTML = "Cargando pendientes...";
@@ -428,7 +439,6 @@ async function loadPendientes() {
       }
     });
   } catch(e) {
-    // FIX: Antes se quedaba en "Cargando..." para siempre; ahora muestra el error real
     list.innerHTML = `<p style="color:var(--red);">❌ Error al cargar pendientes: ${e.message}</p>`;
     console.error("loadPendientes error:", e);
   }
@@ -472,12 +482,9 @@ async function guardarPendiente() {
       status: "completado"
     });
 
-    // FIX: Reemplazado fbGetDocs con where("__name__") que no es válido en Web SDK v9
-    // Ahora se usa fbGetDoc para leer directamente por ID del documento
     const docSnap = await window.fbGetDoc(window.fbDoc(window.firebaseDB, "registros", docPendienteActual));
     const record = docSnap.data();
 
-    // Aseguramos que la foto del ticket recién subida esté en el record para el PDF
     record.fotoTicket = dataFotos.pend;
     record.ticket = ticketVal;
 
@@ -634,10 +641,17 @@ async function loadUsuarios() {
       const d = docSnap.data();
       window._usuariosCache[docSnap.id] = d;
       const activo = d.activo !== false;
+      
+      // Limpiar correo falso en lista para que se vea solo el alias
+      let displayAlias = d.email || "";
+      if (displayAlias.endsWith("@rompeolas.app")) {
+        displayAlias = displayAlias.replace("@rompeolas.app", "");
+      }
+
       list.innerHTML += `
         <div class="history-card" style="cursor:pointer;" onclick="abrirUsuario('${docSnap.id}')">
-          <div class="hc-header"><span>${d.nombre || d.email}</span><span style="color:${activo ? 'var(--green)' : 'var(--red)'};">${activo ? '✅ Activo' : '⛔ Inactivo'}</span></div>
-          <p style="color:var(--text-muted); font-size:12px; margin-top:5px;">${d.email} • ${rolLabels[d.rol] || "👷 Capturista"}</p>
+          <div class="hc-header"><span>${d.nombre || displayAlias}</span><span style="color:${activo ? 'var(--green)' : 'var(--red)'};">${activo ? '✅ Activo' : '⛔ Inactivo'}</span></div>
+          <p style="color:var(--text-muted); font-size:12px; margin-top:5px;">Alias: ${displayAlias} • ${rolLabels[d.rol] || "👷 Capturista"}</p>
         </div>
       `;
     });
@@ -653,8 +667,15 @@ function abrirUsuario(docId) {
 
   document.getElementById("usuario-modal-title").textContent = docId ? "Editar usuario" : "Nuevo usuario";
   document.getElementById("usuario-doc-id").value = docId || "";
-  document.getElementById("usuario-email").value = u?.email || "";
-  document.getElementById("usuario-email").disabled = !!docId;
+  
+  // Limpiar el @rompeolas.app del input si ya existe un usuario
+  let displayUser = u?.email || "";
+  if (displayUser.endsWith("@rompeolas.app")) {
+    displayUser = displayUser.replace("@rompeolas.app", "");
+  }
+
+  document.getElementById("usuario-email").value = displayUser;
+  document.getElementById("usuario-email").disabled = !!docId; // No dejar cambiar el alias de un usuario ya creado
   document.getElementById("usuario-nombre").value = u?.nombre || "";
   document.getElementById("usuario-rol").value = u?.rol || "capturista";
   document.getElementById("usuario-activo").checked = u ? (u.activo !== false) : true;
@@ -671,20 +692,23 @@ async function guardarUsuario() {
   errBox.classList.add("hidden");
 
   const docId = document.getElementById("usuario-doc-id").value;
-  const email = document.getElementById("usuario-email").value.trim().toLowerCase();
+  const usernameInput = document.getElementById("usuario-email").value.trim().toLowerCase();
   const nombre = document.getElementById("usuario-nombre").value.trim();
   const rol = document.getElementById("usuario-rol").value;
   const activo = document.getElementById("usuario-activo").checked;
 
-  if (!email || !email.includes("@")) { errBox.textContent = "Ingresa un correo válido."; errBox.classList.remove("hidden"); return; }
+  if (!usernameInput) { errBox.textContent = "Ingresa un alias / usuario."; errBox.classList.remove("hidden"); return; }
   if (!nombre) { errBox.textContent = "Ingresa el nombre del usuario."; errBox.classList.remove("hidden"); return; }
+
+  // Aquí creamos el correo falso que va a parar a la Base de Datos
+  const fakeEmail = usernameInput.includes("@") ? usernameInput : `${usernameInput}@rompeolas.app`;
 
   showLoading("Guardando usuario...");
   try {
     if (docId) {
       await window.fbUpdateDoc(window.fbDoc(window.firebaseDB, "whitelist", docId), { nombre, rol, activo });
     } else {
-      await window.fbSetDoc(window.fbDoc(window.firebaseDB, "whitelist", email), { email, nombre, rol, activo });
+      await window.fbSetDoc(window.fbDoc(window.firebaseDB, "whitelist", fakeEmail), { email: fakeEmail, nombre, rol, activo });
     }
     hideLoading();
     cerrarModalUsuario();
@@ -710,6 +734,11 @@ async function exportCSV() {
 
     snap.forEach(docSnap => {
       const d = docSnap.data();
+      
+      // Limpiar alias en exportación si se desea
+      let userClean = d.usuario || "";
+      if(userClean.endsWith("@rompeolas.app")) userClean = userClean.replace("@rompeolas.app", "");
+
       const fila = [
         d.fecha || "",
         d.eco || "",
@@ -719,7 +748,7 @@ async function exportCSV() {
         d.rendimiento ?? "",
         d.ticket || "",
         d.status || "",
-        d.usuario || ""
+        userClean
       ];
       rows.push(fila.join(","));
     });
