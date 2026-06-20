@@ -224,23 +224,74 @@ function toggleTicket() {
   document.getElementById("ticket-section").style.display = isChecked ? "none" : "block";
 }
 
-/* --- COMPRESIÓN DE IMÁGENES --- */
-function compressImage(dataUrl, maxWidth, quality, callback) {
+/* --- COMPRESIÓN DE IMÁGENES (con control de tamaño máximo) ---
+   Firestore rechaza documentos de más de ~1 MiB. En vez de fijar una sola
+   calidad/ancho "a ojo" (que puede no bastar con fotos muy detalladas o con
+   poca luz), comprimimos de forma adaptativa: probamos combinaciones de
+   ancho/calidad cada vez más agresivas hasta quedar por debajo de un tamaño
+   objetivo en bytes, o hasta agotar los intentos. */
+
+// Tamaño aproximado en bytes de un dataURL base64 (sin el prefijo "data:image/...;base64,")
+function tamanoBase64Bytes(dataUrl) {
+  if (!dataUrl) return 0;
+  const base64 = dataUrl.split(",")[1] || "";
+  return Math.ceil(base64.length * 0.75);
+}
+
+function compressImageToTarget(dataUrl, targetBytes, callback) {
   const img = new Image();
   img.onload = () => {
-    let { width, height } = img;
-    if (width > maxWidth) {
-      height = Math.round((height * maxWidth) / width);
-      width = maxWidth;
-    }
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-    callback(canvas.toDataURL("image/jpeg", quality));
+    // De más detalle a menos. Los últimos escalones son agresivos a propósito:
+    // es mejor una foto chica pero legible que un registro que no se puede guardar.
+    const intentos = [
+      { maxWidth: 900, quality: 0.6 },
+      { maxWidth: 800, quality: 0.5 },
+      { maxWidth: 700, quality: 0.45 },
+      { maxWidth: 600, quality: 0.4 },
+      { maxWidth: 500, quality: 0.35 },
+      { maxWidth: 400, quality: 0.3 }
+    ];
+
+    let i = 0;
+    const probar = () => {
+      const { maxWidth, quality } = intentos[Math.min(i, intentos.length - 1)];
+      let width = img.width, height = img.height;
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      const resultado = canvas.toDataURL("image/jpeg", quality);
+
+      if (tamanoBase64Bytes(resultado) <= targetBytes || i === intentos.length - 1) {
+        callback(resultado);
+      } else {
+        i++;
+        probar();
+      }
+    };
+    probar();
   };
   img.onerror = () => callback(dataUrl);
   img.src = dataUrl;
+}
+
+// Tamaño objetivo por tipo de foto. Los tickets suelen llevar texto impreso
+// pequeño, así que les dejamos un poco más de margen que a las fotos de bomba
+// (donde solo hace falta leer el dígito del contador).
+const TARGET_BYTES_FOTO = { ini: 140 * 1024, fin: 140 * 1024, ticket: 220 * 1024, pend: 220 * 1024 };
+
+// Límite de seguridad para la suma de las fotos de un registro. Lo dejamos con
+// margen real bajo el límite duro de Firestore (~1 MiB ≈ 1048576 bytes) para
+// cubrir el resto de los campos del documento.
+const LIMITE_TOTAL_FOTOS_BYTES = 850 * 1024;
+
+function validarTamanoFotos(...fotos) {
+  let total = 0;
+  fotos.forEach(f => { if (f) total += tamanoBase64Bytes(f); });
+  return { ok: total <= LIMITE_TOTAL_FOTOS_BYTES, totalKB: Math.round(total / 1024) };
 }
 
 /* --- FOTOS SURTIDOR Y TICKET --- */
