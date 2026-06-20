@@ -1,9 +1,8 @@
-// service-worker.js — FuelControl PWA
-// IMPORTANTE: sube este número (v2, v3, v4...) CADA VEZ que publiques cambios
-// en index.html / app.js / style.css. Si no lo subes, los navegadores que ya
-// tengan la app instalada pueden tardar en notar que hay una versión nueva.
-const CACHE_NAME = "fuelcontrol-v3";
+// service-worker.js
+const CACHE_NAME = "fuelcontrol-v5";
 
+// Quitamos los íconos de aquí para que si hay un error con la imagen, 
+// no se bloquee toda la instalación de la app.
 const STATIC_ASSETS = [
   "./index.html",
   "./style.css",
@@ -12,8 +11,6 @@ const STATIC_ASSETS = [
   "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Mono&display=swap"
 ];
 
-// Archivos del "app shell" que cambian seguido: siempre se intenta traer la
-// versión más nueva de internet primero; el caché es solo respaldo offline.
 const NETWORK_FIRST_PATTERNS = [/index\.html$/, /app\.js$/, /style\.css$/, /\/$/];
 
 self.addEventListener("install", event => {
@@ -35,14 +32,11 @@ self.addEventListener("activate", event => {
 self.addEventListener("fetch", event => {
   const url = event.request.url;
 
-  // Firebase: siempre red, sin caché de respaldo más que el último visto
   if (url.includes("firebase") || url.includes("googleapis.com/identitytoolkit")) {
     event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
     return;
   }
 
-  // App shell propio: red primero (para recibir actualizaciones al instante),
-  // y si no hay internet, usamos lo último que quedó guardado en caché.
   if (NETWORK_FIRST_PATTERNS.some(re => re.test(url))) {
     event.respondWith(
       fetch(event.request)
@@ -56,7 +50,6 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // Resto de recursos (fuentes, etc.): caché primero, red como respaldo
   event.respondWith(
     caches.match(event.request).then(cached => cached || fetch(event.request))
   );
