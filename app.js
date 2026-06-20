@@ -351,8 +351,9 @@ async function getRendimiento(ecoActual, horoRawActual, litrosActuales) {
 }
 
 /* --- GUARDAR A FIREBASE --- */
+/* --- GUARDAR A FIREBASE --- */
 async function handleSubmit() {
-  showLoading("Calculando rendimiento y guardando...");
+  showLoading("Guardando en base de datos...");
   try {
     const eco = document.getElementById("f-eco").value;
     const sinHoro = document.getElementById("chk-sin-horometro").checked;
@@ -380,20 +381,26 @@ async function handleSubmit() {
       creadoEn: window.fbTimestamp.now()
     };
 
+    // 1. PRIMERO GUARDAMOS EN FIREBASE
+    await window.fbSetDoc(docRef, record);
+
+    // 2. SOLO SI FIREBASE GUARDÓ CON ÉXITO, GENERAMOS EL PDF
     if(!isPendiente) {
-      showLoading("Generando PDF Completo...");
+      showLoading("Datos guardados. Generando PDF...");
       const pdfDoc = await generateTicketPDF(record);
       pdfDoc.save(`FuelControl_${eco}_${record.ticket}.pdf`);
     }
 
-    await window.fbSetDoc(docRef, record);
     hideLoading();
-    alert(isPendiente ? "Guardado como PENDIENTE. (No se generó PDF aún)" : "Guardado con éxito y PDF descargado.");
+    alert(isPendiente ? "Guardado como PENDIENTE. (No se generó PDF aún)" : "Guardado con éxito en la nube y PDF descargado.");
     location.reload();
 
-  } catch(e) { hideLoading(); alert("Error: " + e.message); }
+  } catch(e) { 
+    hideLoading(); 
+    // Si no hay internet o no tiene permisos, salta directo aquí y NO descarga PDF.
+    alert("❌ Error al subir a Firebase. Revisa tu conexión a internet o tus permisos. Detalle: " + e.message); 
+  }
 }
-
 /* --- CACHÉ DE REGISTROS --- */
 window._historialCache = {};
 window._pendientesCache = {};
