@@ -67,6 +67,7 @@
         <div class="step-item" id="step-dot-4"><span>4</span><p>Confirmar</p></div>
       </div>
 
+      <!-- ═══════════════ PASO 1: EQUIPO ═══════════════ -->
       <div class="step-panel active" id="panel-step-1">
         <div class="panel-header"><span class="panel-tag">Paso 1 de 4</span><h2 class="panel-title">Datos del equipo</h2></div>
         <div class="field-group"><label class="field-label">Fecha</label><input type="date" id="f-fecha" class="field-input" /></div>
@@ -89,10 +90,12 @@
         </div>
         <button class="btn btn-primary btn-next" onclick="goStep(2)">Siguiente</button>
       </div>
+      <!-- ─── FIN PASO 1 ─── -->
 
+      <!-- ═══════════════ PASO 2: CARGA ═══════════════ -->
       <div class="step-panel" id="panel-step-2">
         <div class="panel-header"><span class="panel-tag">Paso 2 de 4</span><h2 class="panel-title">Datos de la carga</h2></div>
-        
+
         <div class="field-group">
           <label class="field-label">Combustible</label>
           <div class="radio-group">
@@ -100,16 +103,18 @@
             <label class="radio-card"><input type="radio" name="tipo-combustible" value="Gasolina" /> Gasolina</label>
           </div>
         </div>
-        
-        <div class="field-group"><label class="field-label">Litros cargados</label><input type="number" id="f-litros" class="field-input" placeholder="0.00" /></div>
 
+        <div class="field-group">
+          <label class="field-label">Litros cargados</label>
+          <input type="number" id="f-litros" class="field-input" placeholder="0.00" />
+        </div>
+
+        <!-- Foto INICIAL -->
         <div class="field-group" style="background:var(--bg-elevated); padding:15px; border-radius:10px;">
           <label class="field-label">Cuenta litros INICIAL</label>
           <input type="number" id="f-cuenta-inicial" class="field-input" placeholder="0.00" />
-          
           <button class="btn btn-outline btn-sm" id="btn-cam-ini" style="margin-top:10px; width:100%;" onclick="document.getElementById('file-ini').click()">📷 Tomar Foto Inicial</button>
           <input type="file" id="file-ini" accept="image/*" capture="environment" style="display:none" onchange="previewSurtidor(event, 'ini')" />
-          
           <div id="preview-box-ini" class="hidden" style="margin-top:15px; text-align:center;">
             <img id="img-ini" style="max-width:100%; border-radius:8px;" />
             <div style="display:flex; gap:10px; margin-top:10px;">
@@ -117,20 +122,19 @@
               <button class="btn btn-success btn-sm" style="flex:1;" onclick="aceptarSurtidor('ini')">Aceptar ✔</button>
             </div>
           </div>
-          </div>
-        
-<div id="ok-ini" class="alert alert-success hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
-  <span>✅ Foto Inicial Confirmada</span>
-  <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-ini').click()">🔄 Volver a tomar</button>
-</div>
+        </div>
+        <!-- BUG FIX: ok-ini va FUERA del field-group de INICIAL, no dentro -->
+        <div id="ok-ini" class="alert alert-success hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <span>✅ Foto Inicial Confirmada</span>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-ini').click()">🔄 Volver a tomar</button>
+        </div>
 
-        <div class="field-group" style="background:var(--bg-elevated); padding:15px; border-radius:10px;">
+        <!-- Foto FINAL -->
+        <div class="field-group" style="background:var(--bg-elevated); padding:15px; border-radius:10px; margin-top:15px;">
           <label class="field-label">Cuenta litros FINAL</label>
           <input type="number" id="f-cuenta-final" class="field-input" placeholder="0.00" />
-          
           <button class="btn btn-outline btn-sm" id="btn-cam-fin" style="margin-top:10px; width:100%;" onclick="document.getElementById('file-fin').click()">📷 Tomar Foto Final</button>
           <input type="file" id="file-fin" accept="image/*" capture="environment" style="display:none" onchange="previewSurtidor(event, 'fin')" />
-          
           <div id="preview-box-fin" class="hidden" style="margin-top:15px; text-align:center;">
             <img id="img-fin" style="max-width:100%; border-radius:8px;" />
             <div style="display:flex; gap:10px; margin-top:10px;">
@@ -138,10 +142,11 @@
               <button class="btn btn-success btn-sm" style="flex:1;" onclick="aceptarSurtidor('fin')">Aceptar ✔</button>
             </div>
           </div>
-<div id="ok-fin" class="alert alert-success hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
-  <span>✅ Foto Final Confirmada</span>
-  <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-fin').click()">🔄 Volver a tomar</button>
-</div>
+        </div>
+        <!-- BUG FIX: ok-fin va FUERA del field-group de FINAL, no dentro -->
+        <div id="ok-fin" class="alert alert-success hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <span>✅ Foto Final Confirmada</span>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-fin').click()">🔄 Volver a tomar</button>
         </div>
 
         <div class="step-nav">
@@ -149,12 +154,14 @@
           <button class="btn btn-primary" onclick="goStep(3)">Siguiente</button>
         </div>
       </div>
+      <!-- ─── FIN PASO 2 ─── -->
 
+      <!-- ═══════════════ PASO 3: TICKET ═══════════════ -->
       <div class="step-panel" id="panel-step-3">
         <div class="panel-header"><span class="panel-tag">Paso 3 de 4</span><h2 class="panel-title">Ticket de carga</h2></div>
 
-        <label class="toggle-label" style="margin-bottom:20px; padding:10px; background:var(--bg-elevated); border-radius:8px;">
-          <input type="checkbox" id="chk-ticket-despues" onchange="toggleTicket()" /> 
+        <label class="toggle-label" style="margin-bottom:20px; padding:10px; background:var(--bg-elevated); border-radius:8px; display:block;">
+          <input type="checkbox" id="chk-ticket-despues" onchange="toggleTicket()" />
           ⏱ Adjuntar ticket después (Guardar como Pendiente)
         </label>
 
@@ -167,7 +174,6 @@
             <label class="field-label">Foto del ticket</label>
             <button class="btn btn-outline" id="btn-cam-ticket" onclick="document.getElementById('file-ticket').click()" style="width:100%;">📷 Tomar Foto Ticket</button>
             <input type="file" id="file-ticket" accept="image/*" capture="environment" style="display:none" onchange="previewSurtidor(event, 'ticket')" />
-            
             <div id="preview-box-ticket" class="hidden" style="margin-top:15px; text-align:center;">
               <img id="img-ticket" style="max-width:100%; border-radius:8px;" />
               <div style="display:flex; gap:10px; margin-top:10px;">
@@ -175,18 +181,22 @@
                 <button class="btn btn-success btn-sm" style="flex:1;" onclick="aceptarSurtidor('ticket')">Aceptar ✔</button>
               </div>
             </div>
-<div id="ok-ticket" class="alert alert-success hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
-  <span>✅ Ticket Confirmado</span>
-  <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-ticket').click()">🔄 Volver a tomar</button>
-</div>
+            <!-- BUG FIX: ok-ticket va DENTRO de field-group pero FUERA de preview-box -->
+            <div id="ok-ticket" class="alert alert-success hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <span>✅ Ticket Confirmado</span>
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-ticket').click()">🔄 Volver a tomar</button>
+            </div>
+          </div>
         </div>
-
-        <div class="step-nav">
+        <!-- BUG FIX: step-nav va FUERA de ticket-section para que aparezca siempre -->
+        <div class="step-nav" style="margin-top:20px;">
           <button class="btn btn-ghost" onclick="goStep(2)">Atrás</button>
           <button class="btn btn-primary" onclick="goStep(4)">Siguiente</button>
         </div>
       </div>
+      <!-- ─── FIN PASO 3 ─── -->
 
+      <!-- ═══════════════ PASO 4: CONFIRMAR ═══════════════ -->
       <div class="step-panel" id="panel-step-4">
         <div class="panel-header"><span class="panel-tag">Paso 4 de 4</span><h2 class="panel-title">Confirmar</h2></div>
         <div class="summary-card" id="summary-card"></div>
@@ -195,19 +205,35 @@
         <button class="btn btn-primary" id="btn-submit" onclick="handleSubmit()" style="width:100%; margin-top:15px;">Guardar Registro</button>
         <div class="step-nav"><button class="btn btn-ghost" onclick="goStep(3)">Atrás</button></div>
       </div>
+      <!-- ─── FIN PASO 4 ─── -->
+
     </div>
   </div>
+  <!-- ─── FIN content-registro ─── -->
 
   <div class="tab-content" id="content-pendientes">
     <div class="list-container">
       <div class="list-header"><h2>Tickets Pendientes</h2><p>Registros que requieren fotografía del ticket para generar PDF.</p></div>
-      
       <div id="pendientes-list" class="history-list"></div>
     </div>
   </div>
 
-  <div class="tab-content" id="content-historial"><div class="list-container"><div class="list-header"><h2>Registros</h2><input type="date" id="hist-fecha" class="field-input" onchange="loadHistory()" /></div><div id="history-list" class="history-list"></div></div></div>
-  <div class="tab-content" id="content-exportar"><div class="export-container"><div class="export-header"><h2>Exportar CSV</h2></div><button class="btn btn-primary" onclick="exportCSV()">Descargar</button></div></div>
+  <div class="tab-content" id="content-historial">
+    <div class="list-container">
+      <div class="list-header">
+        <h2>Registros</h2>
+        <input type="date" id="hist-fecha" class="field-input" onchange="loadHistory()" />
+      </div>
+      <div id="history-list" class="history-list"></div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="content-exportar">
+    <div class="export-container">
+      <div class="export-header"><h2>Exportar CSV</h2></div>
+      <button class="btn btn-primary" onclick="exportCSV()">Descargar</button>
+    </div>
+  </div>
 
   <div class="tab-content" id="content-usuarios">
     <div class="list-container">
@@ -216,21 +242,21 @@
       <div id="usuarios-list" class="history-list"></div>
     </div>
   </div>
-</div>
 
+</div>
+<!-- ─── FIN screen-app ─── -->
+
+<!-- ═══ MODAL: Subir ticket pendiente ═══ -->
 <div id="modal-pendiente" class="modal-overlay hidden" onclick="if(event.target===this) cerrarModalPendiente()">
   <div class="modal-card">
     <h3 id="pend-eco" style="color:var(--orange); margin-bottom:10px;"></h3>
     <input type="hidden" id="pend-id" />
-
     <div class="field-group">
       <label class="field-label"># Ticket Definitivo</label>
       <input type="text" id="pend-ticket-input" class="field-input" placeholder="Ingresa el folio" />
     </div>
-
     <button class="btn btn-outline" id="btn-cam-pend" onclick="document.getElementById('file-pend').click()" style="width:100%;">📷 Capturar Ticket</button>
     <input type="file" id="file-pend" accept="image/*" capture="environment" style="display:none" onchange="previewSurtidor(event, 'pend')" />
-
     <div id="preview-box-pend" class="hidden" style="margin-top:15px; text-align:center;">
       <img id="img-pend" style="max-width:100%; border-radius:8px;" />
       <div style="display:flex; gap:10px; margin-top:10px;">
@@ -239,17 +265,16 @@
       </div>
     </div>
     <div id="ok-pend" class="alert alert-success hidden" style="margin-top:10px;">✅ Ticket Confirmado</div>
-
     <button class="btn btn-primary" id="btn-save-pend" onclick="guardarPendiente()" style="width:100%; margin-top:20px; display:none;">Cerrar Registro y Generar PDF</button>
     <button class="btn btn-ghost" onclick="cerrarModalPendiente()" style="width:100%; margin-top:10px;">Cancelar</button>
   </div>
 </div>
 
+<!-- ═══ MODAL: Editar registro ═══ -->
 <div id="modal-editar" class="modal-overlay hidden" onclick="if(event.target===this) cerrarModalEditar()">
   <div class="modal-card">
     <h3 style="color:var(--orange); margin-bottom:10px;">✏️ Editar Registro</h3>
     <input type="hidden" id="edit-id" />
-
     <div class="field-group"><label class="field-label">Fecha</label><input type="date" id="edit-fecha" class="field-input" /></div>
     <div class="field-group">
       <label class="field-label"># Económico (ECO)</label>
@@ -262,18 +287,17 @@
       <input type="number" id="edit-horometro" class="field-input" />
     </div>
     <div class="field-group"><label class="field-label"># Ticket</label><input type="text" id="edit-ticket" class="field-input" /></div>
-
     <div id="edit-error" class="alert alert-error hidden"></div>
     <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="guardarEdicion()">Guardar Cambios</button>
     <button class="btn btn-ghost" style="width:100%; margin-top:10px;" onclick="cerrarModalEditar()">Cancelar</button>
   </div>
 </div>
 
+<!-- ═══ MODAL: Gestión de usuarios ═══ -->
 <div id="modal-usuario" class="modal-overlay hidden" onclick="if(event.target===this) cerrarModalUsuario()">
   <div class="modal-card">
     <h3 id="usuario-modal-title" style="color:var(--blue); margin-bottom:10px;">Nuevo usuario</h3>
     <input type="hidden" id="usuario-doc-id" />
-
     <div class="field-group"><label class="field-label">Correo</label><input type="email" id="usuario-email" class="field-input" placeholder="correo@ejemplo.com" /></div>
     <div class="field-group"><label class="field-label">Nombre</label><input type="text" id="usuario-nombre" class="field-input" placeholder="Nombre completo" /></div>
     <div class="field-group">
@@ -285,14 +309,16 @@
       </select>
     </div>
     <label class="toggle-label" style="margin:10px 0; display:block;"><input type="checkbox" id="usuario-activo" checked /> Usuario activo</label>
-
     <div id="usuario-error" class="alert alert-error hidden"></div>
     <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="guardarUsuario()">Guardar</button>
     <button class="btn btn-ghost" style="width:100%; margin-top:10px;" onclick="cerrarModalUsuario()">Cancelar</button>
   </div>
 </div>
 
-<div id="loading-overlay" class="loading-overlay hidden"><div class="loading-card"><div class="spinner"></div><p id="loading-text">Procesando...</p></div></div>
+<div id="loading-overlay" class="loading-overlay hidden">
+  <div class="loading-card"><div class="spinner"></div><p id="loading-text">Procesando...</p></div>
+</div>
+
 <script type="module" src="app.js"></script>
 </body>
 </html>
