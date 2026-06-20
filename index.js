@@ -99,26 +99,63 @@ exports.consolidarPDFsECO = onDocumentCreated(
    Colección: "whitelist"
    Documento por correo: { email: "operador@ejemplo.com", nombre: "Juan Pérez", activo: true }
 
-5. Reglas de Firestore (firestore.rules):
+5. Roles de usuario (whitelist):
+   Cada documento de "whitelist" ahora soporta:
+   { email: "...", nombre: "...", rol: "capturista" | "admin" | "master", activo: true }
+   - capturista: crea registros y sube el ticket de los que dejó "pendientes".
+   - admin: además puede editar registros no conciliados (corregir errores).
+   - master: además puede "conciliar" (bloquear) registros y gestionar usuarios
+             desde la pestaña "Usuarios" de la app.
+   IMPORTANTE: el ID de cada documento debe ser el correo en minúsculas (igual
+   que ya lo exigían las reglas de abajo). El panel "Usuarios" de la app ya
+   crea los documentos nuevos así automáticamente.
+
+6. Reglas de Firestore (firestore.rules):
 
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Solo usuarios en whitelist pueden leer/escribir registros
-    match /registros/{docId} {
-      allow read, write: if request.auth != null && exists(/databases/$(database)/documents/whitelist/$(request.auth.token.email));
+    function whitelistDoc() {
+      return get(/databases/$(database)/documents/whitelist/$(request.auth.token.email));
+    }
+    function isWhitelisted() {
+      return request.auth != null && exists(/databases/$(database)/documents/whitelist/$(request.auth.token.email));
+    }
+    function rolActual() {
+      return whitelistDoc().data.rol;
+    }
+    function estaActivo() {
+      return whitelistDoc().data.activo != false;
     }
 
-    // Whitelist: solo lectura para auth
+    match /registros/{docId} {
+      allow read:   if isWhitelisted() && estaActivo();
+      allow create: if isWhitelisted() && estaActivo();
+
+      // Un registro "conciliado" ya no se puede tocar, sin excepción.
+      // Capturistas solo pueden actualizar SUS registros pendientes (subir ticket).
+      // Admin General / Admin Maestro pueden editar cualquier registro no conciliado.
+      allow update: if isWhitelisted() && estaActivo() &&
+        resource.data.conciliado != true &&
+        (
+          rolActual() in ['admin', 'master'] ||
+          (rolActual() == 'capturista' && resource.data.status == 'pendiente')
+        );
+
+      allow delete: if false;
+    }
+
+    // Whitelist: lectura para cualquier usuario autenticado,
+    // pero solo el Admin Maestro puede crear/editar usuarios y roles.
     match /whitelist/{email} {
       allow read: if request.auth != null;
-      allow write: if false; // Solo admin desde consola
+      allow write: if isWhitelisted() && rolActual() == 'master';
     }
   }
 }
 
-6. Reglas de Storage (storage.rules):
+7. Reglas de Storage (storage.rules):
 
 rules_version = '2';
 service firebase.storage {
