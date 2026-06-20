@@ -25,8 +25,9 @@
       <h2 class="login-heading">Inicia sesión</h2>
       <div id="login-error" class="alert alert-error hidden"></div>
       <div class="field-group">
-        <label class="field-label">Correo electrónico</label>
-        <input type="email" id="login-email" class="field-input" placeholder="tu@correo.com" />
+        <!-- CAMBIO: Se cambió el label a "Usuario" y el id/placeholder -->
+        <label class="field-label">Usuario</label>
+        <input type="text" id="login-username" class="field-input" placeholder="Ej. operador1" />
       </div>
       <div class="field-group">
         <label class="field-label">Contraseña</label>
@@ -123,7 +124,6 @@
             </div>
           </div>
         </div>
-        <!-- BUG FIX: ok-ini va FUERA del field-group de INICIAL, no dentro -->
         <div id="ok-ini" class="alert alert-success hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
           <span>✅ Foto Inicial Confirmada</span>
           <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-ini').click()">🔄 Volver a tomar</button>
@@ -143,7 +143,6 @@
             </div>
           </div>
         </div>
-        <!-- BUG FIX: ok-fin va FUERA del field-group de FINAL, no dentro -->
         <div id="ok-fin" class="alert alert-success hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
           <span>✅ Foto Final Confirmada</span>
           <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-fin').click()">🔄 Volver a tomar</button>
@@ -181,14 +180,12 @@
                 <button class="btn btn-success btn-sm" style="flex:1;" onclick="aceptarSurtidor('ticket')">Aceptar ✔</button>
               </div>
             </div>
-            <!-- BUG FIX: ok-ticket va DENTRO de field-group pero FUERA de preview-box -->
             <div id="ok-ticket" class="alert alert-success hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
               <span>✅ Ticket Confirmado</span>
               <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-ticket').click()">🔄 Volver a tomar</button>
             </div>
           </div>
         </div>
-        <!-- BUG FIX: step-nav va FUERA de ticket-section para que aparezca siempre -->
         <div class="step-nav" style="margin-top:20px;">
           <button class="btn btn-ghost" onclick="goStep(2)">Atrás</button>
           <button class="btn btn-primary" onclick="goStep(4)">Siguiente</button>
@@ -298,7 +295,13 @@
   <div class="modal-card">
     <h3 id="usuario-modal-title" style="color:var(--blue); margin-bottom:10px;">Nuevo usuario</h3>
     <input type="hidden" id="usuario-doc-id" />
-    <div class="field-group"><label class="field-label">Correo</label><input type="email" id="usuario-email" class="field-input" placeholder="correo@ejemplo.com" /></div>
+    
+    <!-- CAMBIO: Se cambió el label a "Usuario (Alias)" y el id/type/placeholder -->
+    <div class="field-group">
+      <label class="field-label">Usuario (Alias)</label>
+      <input type="text" id="usuario-email" class="field-input" placeholder="Ej. juan.perez" />
+    </div>
+    
     <div class="field-group"><label class="field-label">Nombre</label><input type="text" id="usuario-nombre" class="field-input" placeholder="Nombre completo" /></div>
     <div class="field-group">
       <label class="field-label">Rol</label>
