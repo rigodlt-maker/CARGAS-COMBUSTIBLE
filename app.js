@@ -224,23 +224,74 @@ function toggleTicket() {
   document.getElementById("ticket-section").style.display = isChecked ? "none" : "block";
 }
 
-/* --- COMPRESIÓN DE IMÁGENES --- */
-function compressImage(dataUrl, maxWidth, quality, callback) {
+/* --- COMPRESIÓN DE IMÁGENES (con control de tamaño máximo) ---
+   Firestore rechaza documentos de más de ~1 MiB. En vez de fijar una sola
+   calidad/ancho "a ojo" (que puede no bastar con fotos muy detalladas o con
+   poca luz), comprimimos de forma adaptativa: probamos combinaciones de
+   ancho/calidad cada vez más agresivas hasta quedar por debajo de un tamaño
+   objetivo en bytes, o hasta agotar los intentos. */
+
+// Tamaño aproximado en bytes de un dataURL base64 (sin el prefijo "data:image/...;base64,")
+function tamanoBase64Bytes(dataUrl) {
+  if (!dataUrl) return 0;
+  const base64 = dataUrl.split(",")[1] || "";
+  return Math.ceil(base64.length * 0.75);
+}
+
+function compressImageToTarget(dataUrl, targetBytes, callback) {
   const img = new Image();
   img.onload = () => {
-    let { width, height } = img;
-    if (width > maxWidth) {
-      height = Math.round((height * maxWidth) / width);
-      width = maxWidth;
-    }
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-    callback(canvas.toDataURL("image/jpeg", quality));
+    // De más detalle a menos. Los últimos escalones son agresivos a propósito:
+    // es mejor una foto chica pero legible que un registro que no se puede guardar.
+    const intentos = [
+      { maxWidth: 900, quality: 0.6 },
+      { maxWidth: 800, quality: 0.5 },
+      { maxWidth: 700, quality: 0.45 },
+      { maxWidth: 600, quality: 0.4 },
+      { maxWidth: 500, quality: 0.35 },
+      { maxWidth: 400, quality: 0.3 }
+    ];
+
+    let i = 0;
+    const probar = () => {
+      const { maxWidth, quality } = intentos[Math.min(i, intentos.length - 1)];
+      let width = img.width, height = img.height;
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      const resultado = canvas.toDataURL("image/jpeg", quality);
+
+      if (tamanoBase64Bytes(resultado) <= targetBytes || i === intentos.length - 1) {
+        callback(resultado);
+      } else {
+        i++;
+        probar();
+      }
+    };
+    probar();
   };
   img.onerror = () => callback(dataUrl);
   img.src = dataUrl;
+}
+
+// Tamaño objetivo por tipo de foto. Los tickets suelen llevar texto impreso
+// pequeño, así que les dejamos un poco más de margen que a las fotos de bomba
+// (donde solo hace falta leer el dígito del contador).
+const TARGET_BYTES_FOTO = { ini: 140 * 1024, fin: 140 * 1024, ticket: 220 * 1024, pend: 220 * 1024 };
+
+// Límite de seguridad para la suma de las fotos de un registro. Lo dejamos con
+// margen real bajo el límite duro de Firestore (~1 MiB ≈ 1048576 bytes) para
+// cubrir el resto de los campos del documento.
+const LIMITE_TOTAL_FOTOS_BYTES = 850 * 1024;
+
+function validarTamanoFotos(...fotos) {
+  let total = 0;
+  fotos.forEach(f => { if (f) total += tamanoBase64Bytes(f); });
+  return { ok: total <= LIMITE_TOTAL_FOTOS_BYTES, totalKB: Math.round(total / 1024) };
 }
 
 /* --- FOTOS SURTIDOR Y TICKET --- */
@@ -250,7 +301,7 @@ function previewSurtidor(event, tipo) {
 
   const reader = new FileReader();
   reader.onload = (e) => {
-    compressImage(e.target.result, 800, 0.7, (dataUrl) => {
+    compressImageToTarget(e.target.result, TARGET_BYTES_FOTO[tipo], (dataUrl) => {
       document.getElementById(`img-${tipo}`).src = dataUrl;
       document.getElementById(`preview-box-${tipo}`).classList.remove("hidden");
       document.getElementById(`btn-cam-${tipo}`).classList.add("hidden");
@@ -433,6 +484,9 @@ async function loadPendientes() {
           <div class="history-card" style="border-left: 4px solid var(--blue); cursor:default;">
             <div class="hc-header"><span>${d.eco}</span><span>${d.fecha}</span></div>
             <p style="color:var(--blue); font-size:12px; margin-top:5px;">🔒 Conciliado sin ticket • ${d.litros} L</p>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button class="btn btn-outline btn-sm" onclick="descargarPDFDesdeCache('${docSnap.id}')">📥 Descargar PDF</button>
+            </div>
           </div>
         `;
       } else {
@@ -440,6 +494,9 @@ async function loadPendientes() {
           <div class="history-card" style="border-left: 4px solid var(--orange); cursor:pointer;" onclick="abrirPendiente('${docSnap.id}')">
             <div class="hc-header"><span>${d.eco}</span><span>${d.fecha}</span></div>
             <p style="color:var(--orange); font-size:12px; margin-top:5px;">Falta Ticket • ${d.litros} L</p>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); descargarPDFDesdeCache('${docSnap.id}')">📥 Descargar PDF</button>
+            </div>
           </div>
         `;
       }
@@ -602,7 +659,7 @@ async function loadHistory() {
       const colorEstatus = esConciliado ? "var(--blue)" : (esPendiente ? "var(--orange)" : "var(--green)");
       const txtEstatus = esConciliado ? "🔒 Conciliado" : (esPendiente ? "⏳ Pendiente" : "✅ Completado");
 
-      let botones = "";
+      let botones = `<button class="btn btn-outline btn-sm" onclick="descargarPDFDesdeCache('${docSnap.id}')">📥 Descargar PDF</button>`;
       if (!esConciliado) {
         if (esPendiente) {
           botones += `<button class="btn btn-outline btn-sm" onclick="abrirPendiente('${docSnap.id}')">📷 Subir Ticket</button>`;
@@ -814,13 +871,37 @@ async function generateTicketPDF(record) {
     { label: "Bomba (Final)",   data: record.fotoFinal,   x: margin + halfW + gap }
   ];
 
+  // Placeholder reutilizable para cuando una foto no existe (registro viejo,
+  // pendiente sin cerrar, error de carga, etc.) — así el PDF nunca truena.
+  function dibujarPlaceholder(x, yPos, w, h, texto) {
+    doc.setDrawColor(210, 210, 210);
+    doc.setFillColor(245, 245, 245);
+    doc.rect(x, yPos, w, h, "FD");
+    doc.setTextColor(150, 150, 150); doc.setFontSize(9); doc.setFont("helvetica", "italic");
+    doc.text(texto, x + w / 2, yPos + h / 2, { align: "center" });
+  }
+
   let maxBottomY = y;
   fotosTop.forEach(f => {
-    if (!f.data) return;
     doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
     doc.text(f.label, f.x, y - 0.06);
 
-    const props = doc.getImageProperties(f.data);
+    if (!f.data) {
+      const hPlaceholder = 2.2;
+      dibujarPlaceholder(f.x, y, halfW, hPlaceholder, "Foto no disponible");
+      maxBottomY = Math.max(maxBottomY, y + hPlaceholder);
+      return;
+    }
+
+    let props;
+    try { props = doc.getImageProperties(f.data); }
+    catch (err) {
+      const hPlaceholder = 2.2;
+      dibujarPlaceholder(f.x, y, halfW, hPlaceholder, "Foto inválida o corrupta");
+      maxBottomY = Math.max(maxBottomY, y + hPlaceholder);
+      return;
+    }
+
     let w = halfW, h = (props.height * w) / props.width;
     if (h > maxHTop) { h = maxHTop; w = (props.width * h) / props.height; }
 
@@ -828,18 +909,27 @@ async function generateTicketPDF(record) {
     maxBottomY = Math.max(maxBottomY, y + h);
   });
 
+  const yTicket = maxBottomY + 0.4;
+  doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
+  doc.text("Ticket de Carga", margin, yTicket - 0.06);
+
   if (record.fotoTicket) {
-    const yTicket = maxBottomY + 0.4;
-    doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
-    doc.text("Ticket de Carga", margin, yTicket - 0.06);
+    let props;
+    try { props = doc.getImageProperties(record.fotoTicket); }
+    catch (err) { props = null; }
 
-    const props = doc.getImageProperties(record.fotoTicket);
-    const maxHTicket = pageH - margin - yTicket;
-    let w = contentW, h = (props.height * w) / props.width;
-    if (h > maxHTicket) { h = maxHTicket; w = (props.width * h) / props.height; }
-
-    const xTicket = margin + (contentW - w) / 2;
-    doc.addImage(record.fotoTicket, "JPEG", xTicket, yTicket, w, h);
+    if (props) {
+      const maxHTicket = pageH - margin - yTicket;
+      let w = contentW, h = (props.height * w) / props.width;
+      if (h > maxHTicket) { h = maxHTicket; w = (props.width * h) / props.height; }
+      const xTicket = margin + (contentW - w) / 2;
+      doc.addImage(record.fotoTicket, "JPEG", xTicket, yTicket, w, h);
+    } else {
+      dibujarPlaceholder(margin, yTicket, contentW, 1.5, "Foto de ticket inválida o corrupta");
+    }
+  } else {
+    const texto = record.status === "pendiente" ? "Ticket aún pendiente de adjuntar" : "Foto de ticket no disponible";
+    dibujarPlaceholder(margin, yTicket, contentW, 1.5, texto);
   }
 
   return doc;
@@ -849,27 +939,38 @@ function showLoading(msg="Procesando...") { document.getElementById("loading-tex
 function hideLoading() { document.getElementById("loading-overlay").classList.add("hidden"); }
 
 // --- FUNCIÓN PARA RE-GENERAR Y DESCARGAR PDF DESDE LA SESIÓN MASTER ---
-function forceDownloadPDF(record) {
+async function forceDownloadPDF(record) {
+  if (!record) { alert("❌ No se encontró el registro para generar el PDF."); return; }
   try {
     showLoading("Generando PDF de respaldo...");
-    
-    // Verificamos si la librería jsPDF está cargada
-    if (typeof jspdf === 'undefined' && typeof jsPDF === 'undefined') {
-      throw new Error("Librería PDF no disponible en este momento.");
-    }
 
-    // Llamamos a tu función existente que fabrica el PDF
-    const pdfDoc = generateTicketPDF(record);
-    
-    // Descargamos el archivo con el nombre estándar
-    pdfDoc.save(`FuelControl_${record.eco}_${record.ticket}.pdf`);
-    
+    // generateTicketPDF es async (puede tener que cargar jsPDF primero),
+    // así que hay que esperarla. Antes esto regresaba una Promise en vez
+    // del documento y pdfDoc.save() tronaba silenciosamente.
+    const pdfDoc = await generateTicketPDF(record);
+
+    const ecoSafe = (record.eco || "SIN-ECO").toString().replace(/[\\/:*?"<>|]/g, "-");
+    const ticketSafe = (record.ticket && record.ticket !== "PENDIENTE")
+      ? record.ticket.toString().replace(/[\\/:*?"<>|]/g, "-")
+      : "SIN-TICKET";
+
+    pdfDoc.save(`FuelControl_${ecoSafe}_${ticketSafe}.pdf`);
+
     hideLoading();
-    alert("PDF descargado exitosamente.");
   } catch (error) {
     hideLoading();
     alert("❌ Error al generar el PDF: " + error.message);
   }
+}
+
+/* --- DESCARGAR PDF DESDE LAS LISTAS (Historial / Pendientes) ---
+   Recupera el registro completo desde la caché que ya llenan loadHistory()
+   y loadPendientes(), y dispara la descarga. Así el botón en cada tarjeta
+   solo necesita pasar el id del documento, no todo el objeto. */
+function descargarPDFDesdeCache(id) {
+  const d = _getRegistroCache(id);
+  if (!d) { alert("❌ No se encontró el registro en caché. Recarga la lista e intenta de nuevo."); return; }
+  forceDownloadPDF(d);
 }
 
 
@@ -899,3 +1000,6 @@ window.conciliarRegistro = conciliarRegistro;
 window.abrirUsuario = abrirUsuario;
 window.cerrarModalUsuario = cerrarModalUsuario;
 window.guardarUsuario = guardarUsuario;
+window.forceDownloadPDF = forceDownloadPDF;
+window.descargarPDFDesdeCache = descargarPDFDesdeCache;
+window.loadPendientes = loadPendientes;
