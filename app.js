@@ -34,7 +34,7 @@ async function loadFirebase() {
   const { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js");
   // Añadimos limit, doc y updateDoc para las nuevas funciones
   const { getFirestore, collection, addDoc, getDocs, query, where, orderBy, Timestamp, limit, doc, updateDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
-
+const { getStorage, ref, uploadString } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js");
   const firebaseConfig = {
     apiKey:            "AIzaSyCeIsd_BrHKbAY1HrYb3HL4vG4cpadUTuU",
     authDomain:        "cargas-7bf25.firebaseapp.com",
@@ -61,6 +61,9 @@ async function loadFirebase() {
   window.fbDoc        = doc;
   window.fbUpdateDoc  = updateDoc;
   window.fbSetDoc     = setDoc;
+  window.firebaseStorage = getStorage(app);
+window.fbStorageRef     = ref;
+window.fbUploadString   = uploadString;
 
   initAuth();
 }
@@ -375,6 +378,9 @@ async function handleSubmit() {
     // Calcular rendimiento
     const rendimiento = await getRendimiento(eco, horoRaw, litros);
 
+    // Generamos el ID del documento ANTES de escribir, para nombrar el PDF en Storage
+    const docRef = window.fbDoc(window.fbCollection(window.firebaseDB, "registros"));
+
     const record = {
       fecha: document.getElementById("f-fecha").value,
       eco: eco,
@@ -391,15 +397,18 @@ async function handleSubmit() {
       conciliado: false,
       creadoEn: window.fbTimestamp.now()
     };
-
-    await window.fbAddDoc(window.fbCollection(window.firebaseDB, "registros"), record);
-
-    if(!isPendiente) {
+    
+  if(!isPendiente) {
       showLoading("Generando PDF Completo...");
-      const doc = await generateTicketPDF(record);
-      doc.save(`FuelControl_${eco}_${record.ticket}.pdf`);
+      const pdfDoc = await generateTicketPDF(record);
+      pdfDoc.save(`FuelControl_${eco}_${record.ticket}.pdf`);
+
+      const pdfPath = `${record.fecha}/${eco}/${docRef.id}.pdf`;
+      await window.fbUploadString(window.fbStorageRef(window.firebaseStorage, pdfPath), pdfDoc.output("datauristring"), "data_url");
+      record.pdfPath = pdfPath;
     }
 
+    await window.fbSetDoc(docRef, record);
     hideLoading();
     alert(isPendiente ? "Guardado como PENDIENTE. (No se generó PDF aún)" : "Guardado con éxito y PDF descargado.");
     location.reload(); // Reiniciar app limpia
@@ -543,30 +552,24 @@ async function guardarEdicion() {
 
   showLoading("Guardando cambios...");
   try {
-    const eq = catalogoEquipos.find(e => e.interno === eco);
-    // Nota: el rendimiento se recalcula contra el registro MÁS RECIENTE de ese
-    // ECO en este momento, no necesariamente el que era "anterior" cronológicamente
-    // cuando se creó. Revisa que el valor tenga sentido tras editar un registro viejo.
-    const rendimiento = await getRendimiento(eco, horoRaw, litros);
-    const original = _getRegistroCache(id);
+   const docRef = window.fbDoc(window.firebaseDB, "registros", docPendienteActual);
 
-    await window.fbUpdateDoc(window.fbDoc(window.firebaseDB, "registros", id), {
-      eco, fecha, litros,
-      maquinaria: eq ? eq.maquinaria : "",
-      horometroRaw: horoRaw,
-      rendimiento,
-      ticket: ticket || original?.ticket || ""
+    const snap = await window.fbGetDocs(window.fbQuery(window.fbCollection(window.firebaseDB, "registros"), window.fbWhere("__name__", "==", docPendienteActual)));
+    const record = { ...snap.docs[0].data(), ticket: ticketVal, fotoTicket: dataFotos.pend };
+
+    const docPDF = await generateTicketPDF(record);
+    docPDF.save(`FuelControl_${record.eco}_${ticketVal}.pdf`);
+
+    const pdfPath = `${record.fecha}/${record.eco}/${docPendienteActual}.pdf`;
+    await window.fbUploadString(window.fbStorageRef(window.firebaseStorage, pdfPath), docPDF.output("datauristring"), "data_url");
+
+    await window.fbUpdateDoc(docRef, {
+      ticket: ticketVal,
+      fotoTicket: dataFotos.pend,
+      status: "completado",
+      pdfPath
     });
-
-    hideLoading();
-    cerrarModalEditar();
-    refrescarListaActual();
-  } catch (e) {
-    hideLoading();
-    errBox.textContent = "Error: " + e.message;
-    errBox.classList.remove("hidden");
-  }
-}
+    
 
 /* --- CONCILIAR (solo Admin Maestro): bloquea edición y carga de ticket --- */
 async function conciliarRegistro(id) {
