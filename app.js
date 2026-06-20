@@ -351,7 +351,6 @@ async function getRendimiento(ecoActual, horoRawActual, litrosActuales) {
 }
 
 /* --- GUARDAR A FIREBASE --- */
-/* --- GUARDAR A FIREBASE --- */
 async function handleSubmit() {
   showLoading("Guardando en base de datos...");
   try {
@@ -848,6 +847,31 @@ async function generateTicketPDF(record) {
 
 function showLoading(msg="Procesando...") { document.getElementById("loading-text").textContent = msg; document.getElementById("loading-overlay").classList.remove("hidden"); }
 function hideLoading() { document.getElementById("loading-overlay").classList.add("hidden"); }
+
+// --- FUNCIÓN PARA RE-GENERAR Y DESCARGAR PDF DESDE LA SESIÓN MASTER ---
+function forceDownloadPDF(record) {
+  try {
+    showLoading("Generando PDF de respaldo...");
+    
+    // Verificamos si la librería jsPDF está cargada
+    if (typeof jspdf === 'undefined' && typeof jsPDF === 'undefined') {
+      throw new Error("Librería PDF no disponible en este momento.");
+    }
+
+    // Llamamos a tu función existente que fabrica el PDF
+    const pdfDoc = generateTicketPDF(record);
+    
+    // Descargamos el archivo con el nombre estándar
+    pdfDoc.save(`FuelControl_${record.eco}_${record.ticket}.pdf`);
+    
+    hideLoading();
+    alert("PDF descargado exitosamente.");
+  } catch (error) {
+    hideLoading();
+    alert("❌ Error al generar el PDF: " + error.message);
+  }
+}
+
 
 /* EXPORTACIONES PARA EL HTML */
 window.handleLogin = handleLogin;
