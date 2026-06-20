@@ -2,11 +2,38 @@
 // app.js — FuelControl PWA (Actualizado L/h y Pendientes)
 // =============================================
 
+/* --- REGISTRO DEL SERVICE WORKER (requisito para poder "Instalar app") --- */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").catch(err => {
+      console.error("No se pudo registrar el Service Worker:", err);
+    });
+  });
+}
+
+/* --- INSTALAR COMO APP (botón "📲 Instalar") --- */
+let deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  document.getElementById("btn-install")?.classList.remove("hidden");
+});
+async function installApp() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  document.getElementById("btn-install")?.classList.add("hidden");
+}
+window.addEventListener("appinstalled", () => {
+  document.getElementById("btn-install")?.classList.add("hidden");
+});
+
 async function loadFirebase() {
   const { initializeApp }   = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js");
   const { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js");
   // Añadimos limit, doc y updateDoc para las nuevas funciones
-  const { getFirestore, collection, addDoc, getDocs, query, where, orderBy, Timestamp, limit, doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+  const { getFirestore, collection, addDoc, getDocs, query, where, orderBy, Timestamp, limit, doc, updateDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
 
   const firebaseConfig = {
     apiKey:            "AIzaSyCeIsd_BrHKbAY1HrYb3HL4vG4cpadUTuU",
@@ -33,6 +60,7 @@ async function loadFirebase() {
   window.fbLimit      = limit;
   window.fbDoc        = doc;
   window.fbUpdateDoc  = updateDoc;
+  window.fbSetDoc     = setDoc;
 
   initAuth();
 }
@@ -40,7 +68,8 @@ async function loadFirebase() {
 /* --- VARIABLES GLOBALES --- */
 let currentUser = null;
 let currentStep = 1;
-let isAdmin = false;
+let isAdmin = false;   // true para rol 'admin' o 'master' (edita registros, ve Pendientes)
+let isMaster = false;  // true solo para rol 'master' (Conciliar y gestionar Usuarios)
 
 // Estado de las fotos
 let dataFotos = { ini: null, fin: null, ticket: null, pend: null };
@@ -64,18 +93,21 @@ const catalogoEquipos = [
 ];
 
 /* --- INIT --- */
-cargarSelectorEquipos();
+cargarSelectorEquipos("f-eco");
+cargarSelectorEquipos("edit-eco");
 document.getElementById("f-fecha").value = new Date().toISOString().split("T")[0];
 document.getElementById("hist-fecha").value = new Date().toISOString().split("T")[0];
 document.getElementById("f-horometro").addEventListener("input", updateHorometroBadge);
 loadFirebase();
 
-function cargarSelectorEquipos() {
-  const selectEco = document.getElementById("f-eco");
+function cargarSelectorEquipos(targetId) {
+  const select = document.getElementById(targetId);
+  if (!select) return;
+  select.innerHTML = '<option value="">Selecciona el # ECO...</option>';
   catalogoEquipos.forEach(e => {
     const opt = document.createElement("option");
     opt.value = e.interno; opt.textContent = `${e.interno} - ${e.maquinaria}`;
-    selectEco.appendChild(opt);
+    select.appendChild(opt);
   });
 }
 
@@ -93,6 +125,12 @@ function autoCompletarEquipo() {
   }
 }
 
+function autoCompletarEquipoEdit() {
+  const eco = document.getElementById("edit-eco").value;
+  const eq = catalogoEquipos.find(e => e.interno === eco);
+  document.getElementById("edit-maquinaria").value = eq ? eq.maquinaria : "";
+}
+
 /* --- AUTH Y ROLES --- */
 function initAuth() {
   window.fbAuthChanged(window.firebaseAuth, async (user) => {
@@ -106,9 +144,11 @@ function initAuth() {
       currentUser = user;
       document.getElementById("header-user").textContent = user.email;
       
-      // Activar pestaña admin si tiene rol
-      isAdmin = (authData.rol === 'admin');
+      // Roles: capturista (default) -> admin -> master
+      isAdmin = (authData.rol === 'admin' || authData.rol === 'master');
+      isMaster = (authData.rol === 'master');
       if (isAdmin) document.getElementById("tab-pendientes").classList.remove("hidden");
+      if (isMaster) document.getElementById("tab-usuarios").classList.remove("hidden");
       
       showScreen("app");
     } else {
@@ -124,7 +164,8 @@ async function checkWhitelist(email) {
     const snap = await window.fbGetDocs(q);
     if (snap.empty) return { allowed: false };
     const data = snap.docs[0].data();
-    return { allowed: true, rol: data.rol || 'operador' };
+    if (data.activo === false) return { allowed: false }; // usuario desactivado por un admin
+    return { allowed: true, rol: data.rol || 'capturista' };
   } catch (e) { return { allowed: false }; }
 }
 
@@ -150,6 +191,7 @@ function switchTab(name) {
   document.querySelectorAll(".tab-content").forEach(c => c.classList.toggle("active", c.id === `content-${name}`));
   if (name === "historial") loadHistory();
   if (name === "pendientes" && isAdmin) loadPendientes();
+  if (name === "usuarios" && isMaster) loadUsuarios();
 }
 
 /* --- LOGICA DE FORMULARIO --- */
@@ -224,6 +266,12 @@ function aceptarSurtidor(tipo) {
   document.getElementById(`preview-box-${tipo}`).classList.add("hidden");
   document.getElementById(`btn-cam-${tipo}`).classList.remove("hidden");
   document.getElementById(`ok-${tipo}`).classList.remove("hidden"); // AQUÍ APARECE LA PALOMITA
+
+  // En el modal de "Pendientes", al confirmar la foto del ticket habilitamos
+  // el botón para cerrar el registro y generar el PDF
+  if (tipo === "pend") {
+    document.getElementById("btn-save-pend").style.display = "block";
+  }
 }
 
 /* --- NAVEGACION Y VALIDACION --- */
@@ -340,6 +388,7 @@ async function handleSubmit() {
       fotoFinal: dataFotos.fin,
       fotoTicket: isPendiente ? null : dataFotos.ticket,
       usuario: currentUser.email,
+      conciliado: false,
       creadoEn: window.fbTimestamp.now()
     };
 
@@ -358,31 +407,53 @@ async function handleSubmit() {
   } catch(e) { hideLoading(); alert("Error: " + e.message); }
 }
 
+/* --- CACHÉ DE REGISTROS (evita pasar datos vía atributos onclick) --- */
+window._historialCache = {};
+window._pendientesCache = {};
+function _getRegistroCache(id) {
+  return (window._historialCache && window._historialCache[id]) ||
+         (window._pendientesCache && window._pendientesCache[id]) || null;
+}
+
 /* --- PENDIENTES (ADMIN) --- */
 async function loadPendientes() {
   const list = document.getElementById("pendientes-list");
   list.innerHTML = "Cargando pendientes...";
   const q = window.fbQuery(window.fbCollection(window.firebaseDB, "registros"), window.fbWhere("status", "==", "pendiente"));
   const snap = await window.fbGetDocs(q);
-  
+
+  window._pendientesCache = {};
   if(snap.empty) { list.innerHTML = "<p>No hay tickets pendientes.</p>"; return; }
-  
+
   list.innerHTML = "";
   snap.forEach(docSnap => {
     const d = docSnap.data();
-    list.innerHTML += `
-      <div class="history-card" style="border-left: 4px solid var(--orange); cursor:pointer;" onclick="abrirPendiente('${docSnap.id}', '${d.eco}', '${d.fecha}', ${d.litros})">
-        <div class="hc-header"><span>${d.eco}</span><span>${d.fecha}</span></div>
-        <p style="color:var(--orange); font-size:12px; margin-top:5px;">Falta Ticket • ${d.litros} L</p>
-      </div>
-    `;
+    window._pendientesCache[docSnap.id] = d;
+    const esConciliado = d.conciliado === true;
+
+    if (esConciliado) {
+      list.innerHTML += `
+        <div class="history-card" style="border-left: 4px solid var(--blue); cursor:default;">
+          <div class="hc-header"><span>${d.eco}</span><span>${d.fecha}</span></div>
+          <p style="color:var(--blue); font-size:12px; margin-top:5px;">🔒 Conciliado sin ticket • ${d.litros} L</p>
+        </div>
+      `;
+    } else {
+      list.innerHTML += `
+        <div class="history-card" style="border-left: 4px solid var(--orange); cursor:pointer;" onclick="abrirPendiente('${docSnap.id}')">
+          <div class="hc-header"><span>${d.eco}</span><span>${d.fecha}</span></div>
+          <p style="color:var(--orange); font-size:12px; margin-top:5px;">Falta Ticket • ${d.litros} L</p>
+        </div>
+      `;
+    }
   });
 }
 
 let docPendienteActual = null;
-function abrirPendiente(id, eco, fecha, litros) {
+function abrirPendiente(id) {
+  const d = _getRegistroCache(id);
   docPendienteActual = id;
-  document.getElementById("pend-eco").textContent = `${eco} (${litros} L) - ${fecha}`;
+  document.getElementById("pend-eco").textContent = d ? `${d.eco} (${d.litros} L) - ${d.fecha}` : id;
   document.getElementById("pend-ticket-input").value = "";
   estadoFotos.pend = false;
   dataFotos.pend = null;
@@ -399,7 +470,7 @@ function cerrarModalPendiente() {
   document.getElementById("modal-pendiente").classList.add("hidden");
 }
 
-// Refresca la lista visible (Historial o Pendientes) tras cerrar un registro pendiente
+// Refresca la lista visible (Historial o Pendientes) tras cualquier cambio
 function refrescarListaActual() {
   if (document.getElementById("content-historial").classList.contains("active")) loadHistory();
   if (isAdmin && document.getElementById("content-pendientes").classList.contains("active")) loadPendientes();
@@ -433,6 +504,80 @@ async function guardarPendiente() {
   } catch(e) { hideLoading(); alert("Error: " + e.message); }
 }
 
+/* --- EDITAR REGISTRO (Admin General y Admin Maestro) --- */
+function abrirEditar(id) {
+  const d = _getRegistroCache(id);
+  if (!d) return alert("No se encontró el registro.");
+  document.getElementById("edit-error").classList.add("hidden");
+  document.getElementById("edit-id").value = id;
+  document.getElementById("edit-fecha").value = d.fecha || "";
+  document.getElementById("edit-eco").value = d.eco || "";
+  autoCompletarEquipoEdit();
+  document.getElementById("edit-litros").value = d.litros ?? "";
+  document.getElementById("edit-horometro").value = d.horometroRaw ?? "";
+  document.getElementById("edit-ticket").value = (d.ticket === "PENDIENTE" ? "" : d.ticket) || "";
+  document.getElementById("modal-editar").classList.remove("hidden");
+}
+
+function cerrarModalEditar() {
+  document.getElementById("modal-editar").classList.add("hidden");
+}
+
+async function guardarEdicion() {
+  const errBox = document.getElementById("edit-error");
+  errBox.classList.add("hidden");
+
+  const id = document.getElementById("edit-id").value;
+  const eco = document.getElementById("edit-eco").value;
+  const fecha = document.getElementById("edit-fecha").value;
+  const litros = parseFloat(document.getElementById("edit-litros").value);
+  const horoVal = document.getElementById("edit-horometro").value;
+  const horoRaw = horoVal !== "" ? parseFloat(horoVal) : null;
+  const ticket = document.getElementById("edit-ticket").value.trim();
+
+  if (!eco || !fecha || isNaN(litros)) {
+    errBox.textContent = "Completa ECO, fecha y litros.";
+    errBox.classList.remove("hidden");
+    return;
+  }
+
+  showLoading("Guardando cambios...");
+  try {
+    const eq = catalogoEquipos.find(e => e.interno === eco);
+    // Nota: el rendimiento se recalcula contra el registro MÁS RECIENTE de ese
+    // ECO en este momento, no necesariamente el que era "anterior" cronológicamente
+    // cuando se creó. Revisa que el valor tenga sentido tras editar un registro viejo.
+    const rendimiento = await getRendimiento(eco, horoRaw, litros);
+    const original = _getRegistroCache(id);
+
+    await window.fbUpdateDoc(window.fbDoc(window.firebaseDB, "registros", id), {
+      eco, fecha, litros,
+      maquinaria: eq ? eq.maquinaria : "",
+      horometroRaw: horoRaw,
+      rendimiento,
+      ticket: ticket || original?.ticket || ""
+    });
+
+    hideLoading();
+    cerrarModalEditar();
+    refrescarListaActual();
+  } catch (e) {
+    hideLoading();
+    errBox.textContent = "Error: " + e.message;
+    errBox.classList.remove("hidden");
+  }
+}
+
+/* --- CONCILIAR (solo Admin Maestro): bloquea edición y carga de ticket --- */
+async function conciliarRegistro(id) {
+  if (!confirm("¿Conciliar este registro?\n\nYa no se podrá editar ni subir el ticket después. Esta acción es para administradores maestros.")) return;
+  showLoading("Conciliando registro...");
+  try {
+    await window.fbUpdateDoc(window.fbDoc(window.firebaseDB, "registros", id), { conciliado: true });
+    hideLoading();
+    refrescarListaActual();
+  } catch (e) { hideLoading(); alert("Error: " + e.message); }
+}
 
 /* --- HISTORIAL --- */
 async function loadHistory() {
@@ -447,30 +592,123 @@ async function loadHistory() {
     const q = window.fbQuery(col, window.fbWhere("fecha", "==", fecha));
     const snap = await window.fbGetDocs(q);
 
+    window._historialCache = {};
     if (snap.empty) { list.innerHTML = "<p>No hay registros para esta fecha.</p>"; return; }
 
     list.innerHTML = "";
     snap.forEach(docSnap => {
       const d = docSnap.data();
+      window._historialCache[docSnap.id] = d;
+
       const esPendiente = d.status === "pendiente";
-      const colorEstatus = esPendiente ? "var(--orange)" : "var(--green)";
-      const txtEstatus = esPendiente ? "⏳ Pendiente" : "✅ Completado";
-      // Si está pendiente, la tarjeta es clickeable para subir el ticket faltante
-      const clickAttr = esPendiente
-        ? `onclick="abrirPendiente('${docSnap.id}', '${d.eco}', '${d.fecha}', ${d.litros})" style="border-left:4px solid var(--orange); cursor:pointer;"`
-        : "";
+      const esConciliado = d.conciliado === true;
+      const colorEstatus = esConciliado ? "var(--blue)" : (esPendiente ? "var(--orange)" : "var(--green)");
+      const txtEstatus = esConciliado ? "🔒 Conciliado" : (esPendiente ? "⏳ Pendiente" : "✅ Completado");
+
+      let botones = "";
+      if (!esConciliado) {
+        if (esPendiente) {
+          botones += `<button class="btn btn-outline btn-sm" onclick="abrirPendiente('${docSnap.id}')">📷 Subir Ticket</button>`;
+        }
+        if (isAdmin) {
+          botones += `<button class="btn btn-ghost btn-sm" onclick="abrirEditar('${docSnap.id}')">✏️ Editar</button>`;
+        }
+        if (isMaster) {
+          botones += `<button class="btn btn-ghost btn-sm" style="color:var(--blue); border:1px solid var(--blue);" onclick="conciliarRegistro('${docSnap.id}')">🔒 Conciliar</button>`;
+        }
+      }
+
       list.innerHTML += `
-        <div class="history-card" ${clickAttr}>
+        <div class="history-card" style="cursor:default; ${esPendiente && !esConciliado ? 'border-left:4px solid var(--orange);' : ''}">
           <div class="hc-header"><span>${d.eco}</span><span style="color:${colorEstatus};">${txtEstatus}</span></div>
           <p style="color:var(--text-muted); font-size:12px; margin-top:5px;">
             ${d.maquinaria || ""} • ${d.litros} L • Rend: ${d.rendimiento ?? "N/A"} L/h • Ticket: ${d.ticket || "—"}
           </p>
-          ${esPendiente ? `<p style="color:var(--orange); font-size:11px; margin-top:5px;">👉 Toca para subir el ticket</p>` : ""}
+          ${botones ? `<div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">${botones}</div>` : ""}
         </div>
       `;
     });
   } catch (e) {
     list.innerHTML = `<p>Error al cargar historial: ${e.message}</p>`;
+  }
+}
+
+/* --- USUARIOS Y ROLES (solo Admin Maestro) --- */
+async function loadUsuarios() {
+  const list = document.getElementById("usuarios-list");
+  list.innerHTML = "Cargando usuarios...";
+  try {
+    const snap = await window.fbGetDocs(window.fbCollection(window.firebaseDB, "whitelist"));
+    window._usuariosCache = {};
+    if (snap.empty) { list.innerHTML = "<p>No hay usuarios registrados.</p>"; return; }
+
+    const rolLabels = { master: "🔑 Admin Maestro", admin: "🛡️ Admin General", capturista: "👷 Capturista", operador: "👷 Capturista" };
+
+    list.innerHTML = "";
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      window._usuariosCache[docSnap.id] = d;
+      const activo = d.activo !== false;
+      list.innerHTML += `
+        <div class="history-card" style="cursor:pointer;" onclick="abrirUsuario('${docSnap.id}')">
+          <div class="hc-header"><span>${d.nombre || d.email}</span><span style="color:${activo ? 'var(--green)' : 'var(--red)'};">${activo ? '✅ Activo' : '⛔ Inactivo'}</span></div>
+          <p style="color:var(--text-muted); font-size:12px; margin-top:5px;">${d.email} • ${rolLabels[d.rol] || "👷 Capturista"}</p>
+        </div>
+      `;
+    });
+  } catch (e) {
+    list.innerHTML = `<p>Error al cargar usuarios: ${e.message}</p>`;
+  }
+}
+
+function abrirUsuario(docId) {
+  document.getElementById("usuario-error").classList.add("hidden");
+  const u = docId ? window._usuariosCache?.[docId] : null;
+
+  document.getElementById("usuario-modal-title").textContent = docId ? "Editar usuario" : "Nuevo usuario";
+  document.getElementById("usuario-doc-id").value = docId || "";
+  document.getElementById("usuario-email").value = u?.email || "";
+  document.getElementById("usuario-email").disabled = !!docId; // el correo no se cambia una vez creado
+  document.getElementById("usuario-nombre").value = u?.nombre || "";
+  document.getElementById("usuario-rol").value = u?.rol || "capturista";
+  document.getElementById("usuario-activo").checked = u ? (u.activo !== false) : true;
+
+  document.getElementById("modal-usuario").classList.remove("hidden");
+}
+
+function cerrarModalUsuario() {
+  document.getElementById("modal-usuario").classList.add("hidden");
+}
+
+async function guardarUsuario() {
+  const errBox = document.getElementById("usuario-error");
+  errBox.classList.add("hidden");
+
+  const docId = document.getElementById("usuario-doc-id").value;
+  const email = document.getElementById("usuario-email").value.trim().toLowerCase();
+  const nombre = document.getElementById("usuario-nombre").value.trim();
+  const rol = document.getElementById("usuario-rol").value;
+  const activo = document.getElementById("usuario-activo").checked;
+
+  if (!email || !email.includes("@")) { errBox.textContent = "Ingresa un correo válido."; errBox.classList.remove("hidden"); return; }
+  if (!nombre) { errBox.textContent = "Ingresa el nombre del usuario."; errBox.classList.remove("hidden"); return; }
+
+  showLoading("Guardando usuario...");
+  try {
+    if (docId) {
+      // Usuario existente: se actualiza con el ID que ya tenía (sin tocar el correo)
+      await window.fbUpdateDoc(window.fbDoc(window.firebaseDB, "whitelist", docId), { nombre, rol, activo });
+    } else {
+      // Usuario nuevo: el ID del documento es el correo (recomendado por las reglas de seguridad)
+      await window.fbSetDoc(window.fbDoc(window.firebaseDB, "whitelist", email), { email, nombre, rol, activo });
+    }
+    hideLoading();
+    cerrarModalUsuario();
+    loadUsuarios();
+  } catch (e) {
+    hideLoading();
+    errBox.textContent = "Error: " + e.message;
+    errBox.classList.remove("hidden");
   }
 }
 
@@ -531,42 +769,65 @@ async function generateTicketPDF(record) {
     });
   }
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  // Carta (8.5" x 11"), todo en pulgadas para facilitar el layout en una sola hoja
+  const doc = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
 
-  doc.setFillColor(28, 33, 40); doc.rect(0, 0, 210, 42, "F");
-  doc.setTextColor(232, 98, 10); doc.setFontSize(16); doc.setFont("helvetica", "bold");
-  doc.text("FuelControl — Evidencia de Carga", 14, 15);
-  
-  doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.setTextColor(200, 200, 200);
-  doc.text(`ECO: ${record.eco}   |   Maquinaria: ${record.maquinaria}`, 14, 23);
-  doc.text(`Ticket: ${record.ticket}   |   Fecha: ${record.fecha}`, 14, 29);
-  
-  // Imprimir Rendimiento y Litros
-  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold");
-  doc.text(`Carga: ${record.litros} L   |   Rendimiento: ${record.rendimiento} L/h`, 14, 36);
+  const pageW = 8.5, pageH = 11, margin = 0.4;
+  const contentW = pageW - margin * 2;
 
-  // Acomodo de las 3 fotos en la misma hoja (si caben)
-  let y = 50;
-  const fotosArr = [
-    { label: "Bomba (Inicial)", data: record.fotoInicial },
-    { label: "Bomba (Final)", data: record.fotoFinal },
-    { label: "Ticket", data: record.fotoTicket }
+  // --- Encabezado ---
+  const headerH = 1.4;
+  doc.setFillColor(28, 33, 40); doc.rect(0, 0, pageW, headerH, "F");
+  doc.setTextColor(232, 98, 10); doc.setFontSize(15); doc.setFont("helvetica", "bold");
+  doc.text("FuelControl — Evidencia de Carga", margin, 0.35);
+
+  doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(200, 200, 200);
+  doc.text(`ECO: ${record.eco}   |   Maquinaria: ${record.maquinaria}`, margin, 0.62);
+  doc.text(`Ticket: ${record.ticket}   |   Fecha: ${record.fecha}`, margin, 0.82);
+
+  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
+  doc.text(`Carga: ${record.litros} L   |   Rendimiento: ${record.rendimiento} L/h`, margin, 1.08);
+
+  // --- Fotos del cuenta litros (Inicial y Final), lado a lado ---
+  const gap = 0.2;
+  const halfW = (contentW - gap) / 2;
+  const maxHTop = 4.6;
+  let y = headerH + 0.35;
+
+  const fotosTop = [
+    { label: "Bomba (Inicial)", data: record.fotoInicial, x: margin },
+    { label: "Bomba (Final)",   data: record.fotoFinal,   x: margin + halfW + gap }
   ];
 
-  for (let i = 0; i < fotosArr.length; i++) {
-    if(!fotosArr[i].data) continue;
-    doc.setTextColor(0,0,0); doc.setFontSize(12);
-    doc.text(fotosArr[i].label, 14, y - 2);
-    
-    const props = doc.getImageProperties(fotosArr[i].data);
-    const maxW = 180, maxH = 75; // Altura restringida para que quepan 3
-    let w = maxW, h = (props.height * maxW) / props.width;
-    if (h > maxH) { h = maxH; w = (props.width * maxH) / props.height; }
-    
-    if (y + h > 285) { doc.addPage(); y = 20; }
-    doc.addImage(fotosArr[i].data, "JPEG", 15, y, w, h);
-    y += h + 10;
+  let maxBottomY = y;
+  fotosTop.forEach(f => {
+    if (!f.data) return;
+    doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
+    doc.text(f.label, f.x, y - 0.06);
+
+    const props = doc.getImageProperties(f.data);
+    let w = halfW, h = (props.height * w) / props.width;
+    if (h > maxHTop) { h = maxHTop; w = (props.width * h) / props.height; }
+
+    doc.addImage(f.data, "JPEG", f.x, y, w, h);
+    maxBottomY = Math.max(maxBottomY, y + h);
+  });
+
+  // --- Foto del Ticket, "acostada" (horizontal) en el espacio restante de la hoja ---
+  if (record.fotoTicket) {
+    const yTicket = maxBottomY + 0.4;
+    doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
+    doc.text("Ticket de Carga", margin, yTicket - 0.06);
+
+    const props = doc.getImageProperties(record.fotoTicket);
+    const maxHTicket = pageH - margin - yTicket;
+    let w = contentW, h = (props.height * w) / props.width;
+    if (h > maxHTicket) { h = maxHTicket; w = (props.width * h) / props.height; }
+
+    const xTicket = margin + (contentW - w) / 2; // centrada si quedó más angosta
+    doc.addImage(record.fotoTicket, "JPEG", xTicket, yTicket, w, h);
   }
+
   return doc;
 }
 
@@ -590,3 +851,12 @@ window.cerrarModalPendiente = cerrarModalPendiente;
 window.guardarPendiente = guardarPendiente;
 window.loadHistory = loadHistory;
 window.exportCSV = exportCSV;
+window.installApp = installApp;
+window.autoCompletarEquipoEdit = autoCompletarEquipoEdit;
+window.abrirEditar = abrirEditar;
+window.cerrarModalEditar = cerrarModalEditar;
+window.guardarEdicion = guardarEdicion;
+window.conciliarRegistro = conciliarRegistro;
+window.abrirUsuario = abrirUsuario;
+window.cerrarModalUsuario = cerrarModalUsuario;
+window.guardarUsuario = guardarUsuario;
