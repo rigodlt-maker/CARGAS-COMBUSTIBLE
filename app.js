@@ -552,24 +552,30 @@ async function guardarEdicion() {
 
   showLoading("Guardando cambios...");
   try {
-   const docRef = window.fbDoc(window.firebaseDB, "registros", docPendienteActual);
+    const eq = catalogoEquipos.find(e => e.interno === eco);
+    // Nota: el rendimiento se recalcula contra el registro MÁS RECIENTE de ese
+    // ECO en este momento, no necesariamente el que era "anterior" cronológicamente
+    // cuando se creó. Revisa que el valor tenga sentido tras editar un registro viejo.
+    const rendimiento = await getRendimiento(eco, horoRaw, litros);
+    const original = _getRegistroCache(id);
 
-    const snap = await window.fbGetDocs(window.fbQuery(window.fbCollection(window.firebaseDB, "registros"), window.fbWhere("__name__", "==", docPendienteActual)));
-    const record = { ...snap.docs[0].data(), ticket: ticketVal, fotoTicket: dataFotos.pend };
-
-    const docPDF = await generateTicketPDF(record);
-    docPDF.save(`FuelControl_${record.eco}_${ticketVal}.pdf`);
-
-    const pdfPath = `${record.fecha}/${record.eco}/${docPendienteActual}.pdf`;
-    await window.fbUploadString(window.fbStorageRef(window.firebaseStorage, pdfPath), docPDF.output("datauristring"), "data_url");
-
-    await window.fbUpdateDoc(docRef, {
-      ticket: ticketVal,
-      fotoTicket: dataFotos.pend,
-      status: "completado",
-      pdfPath
+    await window.fbUpdateDoc(window.fbDoc(window.firebaseDB, "registros", id), {
+      eco, fecha, litros,
+      maquinaria: eq ? eq.maquinaria : "",
+      horometroRaw: horoRaw,
+      rendimiento,
+      ticket: ticket || original?.ticket || ""
     });
-    
+
+    hideLoading();
+    cerrarModalEditar();
+    refrescarListaActual();
+  } catch (e) {
+    hideLoading();
+    errBox.textContent = "Error: " + e.message;
+    errBox.classList.remove("hidden");
+  }
+}
 
 /* --- CONCILIAR (solo Admin Maestro): bloquea edición y carga de ticket --- */
 async function conciliarRegistro(id) {
