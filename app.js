@@ -21,7 +21,8 @@ window.addEventListener("beforeinstallprompt", (e) => {
 async function installApp() {
   if (!deferredInstallPrompt) return;
   deferredInstallPrompt.prompt();
-i  deferredInstallPrompt = null;
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
   document.getElementById("btn-install")?.classList.add("hidden");
 }
 window.addEventListener("appinstalled", () => {
@@ -51,7 +52,7 @@ async function loadFirebase() {
   window.fbCollection = collection;
   window.fbAddDoc     = addDoc;
   window.fbGetDocs    = getDocs;
-  window.fbGetDoc     = getDoc;
+  window.fbGetDoc     = getDoc;       
   window.fbQuery      = query;
   window.fbWhere      = where;
   window.fbOrderBy    = orderBy;
@@ -140,10 +141,10 @@ function initAuth() {
         return;
       }
       currentUser = user;
-
+      
       // Mostrar solo el alias en la barra superior
       let displayUser = user.email;
-      if (displayUser.endsWith("@rompeolas.app")) {
+      if(displayUser.endsWith("@rompeolas.app")) {
         displayUser = displayUser.replace("@rompeolas.app", "");
       }
       document.getElementById("header-user").textContent = displayUser;
@@ -173,21 +174,22 @@ async function checkWhitelist(email) {
 }
 
 async function handleLogin() {
+  // Ahora capturamos el alias (ej. operador1)
   const username = document.getElementById("login-username").value.trim().toLowerCase();
   const pw = document.getElementById("login-password").value;
-
-  if (!username || !pw) return showLoginError("Ingresa usuario y contraseña.");
-
+  
+  if(!username || !pw) return showLoginError("Ingresa usuario y contraseña.");
+  
   // Le agregamos el dominio ficticio por detrás
   const fakeEmail = `${username}@rompeolas.app`;
 
   try { await window.fbSignIn(window.firebaseAuth, fakeEmail, pw); }
-  catch (e) { showLoginError("Usuario o contraseña incorrectos."); }
+  catch(e) { showLoginError("Usuario o contraseña incorrectos."); }
 }
 
 async function handleLogout() { await window.fbSignOut(window.firebaseAuth); location.reload(); }
 function showLoginError(msg) { document.getElementById("login-error").textContent = msg; document.getElementById("login-error").classList.remove("hidden"); }
-function togglePassword() { const p = document.getElementById("login-password"); p.type = p.type === "password" ? "text" : "password"; }
+function togglePassword() { const p = document.getElementById("login-password"); p.type = p.type==="password"?"text":"password"; }
 
 function showScreen(name) {
   document.querySelectorAll(".screen").forEach(s => {
@@ -208,97 +210,47 @@ function toggleHorometro() {
   const sinHoro = document.getElementById("chk-sin-horometro").checked;
   const input = document.getElementById("f-horometro");
   input.disabled = sinHoro;
-  if (sinHoro) { input.value = ""; document.getElementById("horometro-badge").textContent = "N/A"; }
+  if(sinHoro) { input.value = ""; document.getElementById("horometro-badge").textContent="N/A"; }
 }
 function updateHorometroBadge() {
   const val = document.getElementById("f-horometro").value;
-  if (!val) return document.getElementById("horometro-badge").textContent = "— h";
+  if(!val) return document.getElementById("horometro-badge").textContent="— h";
   const lastDigit = parseInt(val.toString().slice(-1)) || 0;
   const hours = Math.floor(val / 10);
-  document.getElementById("horometro-badge").textContent = `${hours}h ${lastDigit * 6 > 0 ? lastDigit * 6 + "m" : ""}`;
+  document.getElementById("horometro-badge").textContent = `${hours}h ${lastDigit*6 > 0 ? lastDigit*6+"m" : ""}`;
 }
 function toggleTicket() {
   const isChecked = document.getElementById("chk-ticket-despues").checked;
   document.getElementById("ticket-section").style.display = isChecked ? "none" : "block";
 }
 
-/* --- COMPRESIÓN DE IMÁGENES (con control de tamaño máximo) ---
-   Firestore rechaza documentos de más de ~1 MiB. En vez de fijar una sola
-   calidad/ancho "a ojo" (que puede no bastar con fotos muy detalladas o con
-   poca luz), comprimimos de forma adaptativa: probamos combinaciones de
-   ancho/calidad cada vez más agresivas hasta quedar por debajo de un tamaño
-   objetivo en bytes, o hasta agotar los intentos. */
-
-// Tamaño aproximado en bytes de un dataURL base64 (sin el prefijo "data:image/...;base64,")
-function tamanoBase64Bytes(dataUrl) {
-  if (!dataUrl) return 0;
-  const base64 = dataUrl.split(",")[1] || "";
-  return Math.ceil(base64.length * 0.75);
-}
-
-function compressImageToTarget(dataUrl, targetBytes, callback) {
+/* --- COMPRESIÓN DE IMÁGENES --- */
+function compressImage(dataUrl, maxWidth, quality, callback) {
   const img = new Image();
   img.onload = () => {
-    // De más detalle a menos. Los últimos escalones son agresivos a propósito:
-    // es mejor una foto chica pero legible que un registro que no se puede guardar.
-    const intentos = [
-      { maxWidth: 900, quality: 0.6 },
-      { maxWidth: 800, quality: 0.5 },
-      { maxWidth: 700, quality: 0.45 },
-      { maxWidth: 600, quality: 0.4 },
-      { maxWidth: 500, quality: 0.35 },
-      { maxWidth: 400, quality: 0.3 }
-    ];
-
-    let i = 0;
-    const probar = () => {
-      const { maxWidth, quality } = intentos[Math.min(i, intentos.length - 1)];
-      let width = img.width, height = img.height;
-      if (width > maxWidth) {
-        height = Math.round((height * maxWidth) / width);
-        width = maxWidth;
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = width; canvas.height = height;
-      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-      const resultado = canvas.toDataURL("image/jpeg", quality);
-
-      if (tamanoBase64Bytes(resultado) <= targetBytes || i === intentos.length - 1) {
-        callback(resultado);
-      } else {
-        i++;
-        probar();
-      }
-    };
-    probar();
+    let { width, height } = img;
+    if (width > maxWidth) {
+      height = Math.round((height * maxWidth) / width);
+      width = maxWidth;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+    callback(canvas.toDataURL("image/jpeg", quality));
   };
   img.onerror = () => callback(dataUrl);
   img.src = dataUrl;
 }
 
-// Tamaño objetivo por tipo de foto. Los tickets suelen llevar texto impreso
-// pequeño, así que les dejamos un poco más de margen que a las fotos de bomba
-// (donde solo hace falta leer el dígito del contador).
-const TARGET_BYTES_FOTO = { ini: 140 * 1024, fin: 140 * 1024, ticket: 220 * 1024, pend: 220 * 1024 };
-
-// Límite de seguridad para la suma de las fotos de un registro.
-const LIMITE_TOTAL_FOTOS_BYTES = 850 * 1024;
-
-function validarTamanoFotos(...fotos) {
-  let total = 0;
-  fotos.forEach(f => { if (f) total += tamanoBase64Bytes(f); });
-  return { ok: total <= LIMITE_TOTAL_FOTOS_BYTES, totalKB: Math.round(total / 1024) };
-}
-
 /* --- FOTOS SURTIDOR Y TICKET --- */
-// ✅ CORRECCIÓN: se reemplazó compressImage() (inexistente) por compressImageToTarget()
 function previewSurtidor(event, tipo) {
   const file = event.target.files[0];
   if (!file) return;
 
   const reader = new FileReader();
   reader.onload = (e) => {
-    compressImageToTarget(e.target.result, TARGET_BYTES_FOTO[tipo], (dataUrl) => {
+    compressImage(e.target.result, 800, 0.7, (dataUrl) => {
       document.getElementById(`img-${tipo}`).src = dataUrl;
       document.getElementById(`preview-box-${tipo}`).classList.remove("hidden");
       document.getElementById(`btn-cam-${tipo}`).classList.add("hidden");
@@ -328,7 +280,7 @@ function aceptarSurtidor(tipo) {
 function goStep(n) {
   if (n > currentStep && !validateStep(currentStep)) return;
   currentStep = n;
-  for (let i = 1; i <= 4; i++) {
+  for (let i=1; i<=4; i++) {
     document.getElementById(`panel-step-${i}`)?.classList.toggle("active", i === n);
     document.getElementById(`step-dot-${i}`)?.classList.toggle("active", i === n);
     document.getElementById(`step-line-${i}`)?.classList.toggle("active", i === n);
@@ -337,28 +289,28 @@ function goStep(n) {
 }
 
 function validateStep(step) {
-  if (step === 1) {
-    if (!document.getElementById("f-eco").value) { alert("Selecciona el ECO"); return false; }
-    if (!document.getElementById("chk-sin-horometro").checked && !document.getElementById("f-horometro").value) {
+  if(step === 1) {
+    if(!document.getElementById("f-eco").value) { alert("Selecciona el ECO"); return false; }
+    if(!document.getElementById("chk-sin-horometro").checked && !document.getElementById("f-horometro").value) {
       alert("Falta horómetro"); return false;
     }
     return true;
   }
-  if (step === 2) {
+  if(step === 2) {
     const tipo = document.querySelector('input[name="tipo-combustible"]:checked');
-    if (!tipo) { alert("Selecciona Diésel o Gasolina"); return false; }
-    if (!document.getElementById("f-litros").value) { alert("Faltan litros"); return false; }
+    if(!tipo) { alert("Selecciona Diésel o Gasolina"); return false; }
+    if(!document.getElementById("f-litros").value) { alert("Faltan litros"); return false; }
     const ci = parseFloat(document.getElementById("f-cuenta-inicial").value);
     if (isNaN(ci) || ci !== 0) { alert("❌ La cuenta litros inicial debe ser 0."); return false; }
-    if (!document.getElementById("f-cuenta-final").value) { alert("Falta cuenta final"); return false; }
-    if (!estadoFotos.ini) { alert("❌ Debes tomar y CONFIRMAR la foto Inicial."); return false; }
-    if (!estadoFotos.fin) { alert("❌ Debes tomar y CONFIRMAR la foto Final."); return false; }
+    if(!document.getElementById("f-cuenta-final").value) { alert("Falta cuenta final"); return false; }
+    if(!estadoFotos.ini) { alert("❌ Debes tomar y CONFIRMAR la foto Inicial."); return false; }
+    if(!estadoFotos.fin) { alert("❌ Debes tomar y CONFIRMAR la foto Final."); return false; }
     return true;
   }
-  if (step === 3) {
-    if (!document.getElementById("chk-ticket-despues").checked) {
-      if (!document.getElementById("f-ticket").value) { alert("Ingresa el # de Ticket"); return false; }
-      if (!estadoFotos.ticket) { alert("❌ Debes tomar y CONFIRMAR la foto del Ticket."); return false; }
+  if(step === 3) {
+    if(!document.getElementById("chk-ticket-despues").checked) {
+      if(!document.getElementById("f-ticket").value) { alert("Ingresa el # de Ticket"); return false; }
+      if(!estadoFotos.ticket) { alert("❌ Debes tomar y CONFIRMAR la foto del Ticket."); return false; }
     }
     return true;
   }
@@ -377,25 +329,25 @@ function buildSummary() {
 
 /* --- CALCULO RENDIMIENTO L/H --- */
 async function getRendimiento(ecoActual, horoRawActual, litrosActuales) {
-  if (!horoRawActual) return "N/A";
+  if(!horoRawActual) return "N/A";
   try {
     const col = window.fbCollection(window.firebaseDB, "registros");
     const q = window.fbQuery(col, window.fbWhere("eco", "==", ecoActual), window.fbOrderBy("creadoEn", "desc"), window.fbLimit(1));
     const snap = await window.fbGetDocs(q);
 
-    if (!snap.empty) {
+    if(!snap.empty) {
       const prevData = snap.docs[0].data();
-      if (prevData.horometroRaw) {
+      if(prevData.horometroRaw) {
         const currentHoroDec = (Math.floor(horoRawActual / 10)) + ((horoRawActual % 10) / 10);
         const prevHoroDec = (Math.floor(prevData.horometroRaw / 10)) + ((prevData.horometroRaw % 10) / 10);
         const horasTrabajadas = currentHoroDec - prevHoroDec;
-        if (horasTrabajadas > 0) {
+        if(horasTrabajadas > 0) {
           return (litrosActuales / horasTrabajadas).toFixed(2);
         }
       }
     }
     return "Primer Registro";
-  } catch (e) { return "N/A"; }
+  } catch(e) { return "N/A"; }
 }
 
 /* --- GUARDAR A FIREBASE --- */
@@ -432,7 +384,7 @@ async function handleSubmit() {
     await window.fbSetDoc(docRef, record);
 
     // 2. SOLO SI FIREBASE GUARDÓ CON ÉXITO, GENERAMOS EL PDF
-    if (!isPendiente) {
+    if(!isPendiente) {
       showLoading("Datos guardados. Generando PDF...");
       const pdfDoc = await generateTicketPDF(record);
       pdfDoc.save(`FuelControl_${eco}_${record.ticket}.pdf`);
@@ -442,12 +394,12 @@ async function handleSubmit() {
     alert(isPendiente ? "Guardado como PENDIENTE. (No se generó PDF aún)" : "Guardado con éxito en la nube y PDF descargado.");
     location.reload();
 
-  } catch (e) {
-    hideLoading();
-    alert("❌ Error al subir a Firebase. Revisa tu conexión a internet o tus permisos. Detalle: " + e.message);
+  } catch(e) { 
+    hideLoading(); 
+    // Si no hay internet o no tiene permisos, salta directo aquí y NO descarga PDF.
+    alert("❌ Error al subir a Firebase. Revisa tu conexión a internet o tus permisos. Detalle: " + e.message); 
   }
 }
-
 /* --- CACHÉ DE REGISTROS --- */
 window._historialCache = {};
 window._pendientesCache = {};
@@ -468,9 +420,482 @@ async function loadPendientes() {
     const snap = await window.fbGetDocs(q);
 
     window._pendientesCache = {};
-    if (snap.empty) {
-      list.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:20px;">Sin registros pendientes ✅</p>';
-      return;
+    if(snap.empty) { list.innerHTML = "<p>No hay tickets pendientes.</p>"; return; }
+
+    list.innerHTML = "";
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      window._pendientesCache[docSnap.id] = d;
+      const esConciliado = d.conciliado === true;
+
+      if (esConciliado) {
+        list.innerHTML += `
+          <div class="history-card" style="border-left: 4px solid var(--blue); cursor:default;">
+            <div class="hc-header"><span>${d.eco}</span><span>${d.fecha}</span></div>
+            <p style="color:var(--blue); font-size:12px; margin-top:5px;">🔒 Conciliado sin ticket • ${d.litros} L</p>
+          </div>
+        `;
+      } else {
+        list.innerHTML += `
+          <div class="history-card" style="border-left: 4px solid var(--orange); cursor:pointer;" onclick="abrirPendiente('${docSnap.id}')">
+            <div class="hc-header"><span>${d.eco}</span><span>${d.fecha}</span></div>
+            <p style="color:var(--orange); font-size:12px; margin-top:5px;">Falta Ticket • ${d.litros} L</p>
+          </div>
+        `;
+      }
+    });
+  } catch(e) {
+    list.innerHTML = `<p style="color:var(--red);">❌ Error al cargar pendientes: ${e.message}</p>`;
+    console.error("loadPendientes error:", e);
+  }
+}
+
+let docPendienteActual = null;
+function abrirPendiente(id) {
+  const d = _getRegistroCache(id);
+  docPendienteActual = id;
+  document.getElementById("pend-eco").textContent = d ? `${d.eco} (${d.litros} L) - ${d.fecha}` : id;
+  document.getElementById("pend-ticket-input").value = "";
+  estadoFotos.pend = false;
+  dataFotos.pend = null;
+  document.getElementById("ok-pend").classList.add("hidden");
+  document.getElementById("btn-cam-pend").classList.remove("hidden");
+  document.getElementById("preview-box-pend").classList.add("hidden");
+  document.getElementById("btn-save-pend").style.display = "none";
+  document.getElementById("modal-pendiente").classList.remove("hidden");
+}
+
+function cerrarModalPendiente() {
+  document.getElementById("modal-pendiente").classList.add("hidden");
+}
+
+function refrescarListaActual() {
+  if (document.getElementById("content-historial").classList.contains("active")) loadHistory();
+  if (isAdmin && document.getElementById("content-pendientes").classList.contains("active")) loadPendientes();
+}
+
+async function guardarPendiente() {
+  const ticketVal = document.getElementById("pend-ticket-input").value.trim();
+  if(!ticketVal) return alert("Ingresa el número de ticket definitivo.");
+  if(!estadoFotos.pend) return alert("❌ Debes tomar y CONFIRMAR la foto del Ticket.");
+
+  showLoading("Cerrando registro y generando PDF...");
+  try {
+    const docRef = window.fbDoc(window.firebaseDB, "registros", docPendienteActual);
+    await window.fbUpdateDoc(docRef, {
+      ticket: ticketVal,
+      fotoTicket: dataFotos.pend,
+      status: "completado"
+    });
+
+    const docSnap = await window.fbGetDoc(window.fbDoc(window.firebaseDB, "registros", docPendienteActual));
+    const record = docSnap.data();
+
+    record.fotoTicket = dataFotos.pend;
+    record.ticket = ticketVal;
+
+    const docPDF = await generateTicketPDF(record);
+    docPDF.save(`FuelControl_${record.eco}_${ticketVal}.pdf`);
+
+    hideLoading();
+    alert("Ticket adjuntado y PDF generado.");
+    cerrarModalPendiente();
+    refrescarListaActual();
+  } catch(e) { hideLoading(); alert("Error: " + e.message); }
+}
+
+/* --- EDITAR REGISTRO (Admin General y Admin Maestro) --- */
+function abrirEditar(id) {
+  const d = _getRegistroCache(id);
+  if (!d) return alert("No se encontró el registro.");
+  document.getElementById("edit-error").classList.add("hidden");
+  document.getElementById("edit-id").value = id;
+  document.getElementById("edit-fecha").value = d.fecha || "";
+  document.getElementById("edit-eco").value = d.eco || "";
+  autoCompletarEquipoEdit();
+  document.getElementById("edit-litros").value = d.litros ?? "";
+  document.getElementById("edit-horometro").value = d.horometroRaw ?? "";
+  document.getElementById("edit-ticket").value = (d.ticket === "PENDIENTE" ? "" : d.ticket) || "";
+  document.getElementById("modal-editar").classList.remove("hidden");
+}
+
+function cerrarModalEditar() {
+  document.getElementById("modal-editar").classList.add("hidden");
+}
+
+async function guardarEdicion() {
+  const errBox = document.getElementById("edit-error");
+  errBox.classList.add("hidden");
+
+  const id = document.getElementById("edit-id").value;
+  const eco = document.getElementById("edit-eco").value;
+  const fecha = document.getElementById("edit-fecha").value;
+  const litros = parseFloat(document.getElementById("edit-litros").value);
+  const horoVal = document.getElementById("edit-horometro").value;
+  const horoRaw = horoVal !== "" ? parseFloat(horoVal) : null;
+  const ticket = document.getElementById("edit-ticket").value.trim();
+
+  if (!eco || !fecha || isNaN(litros)) {
+    errBox.textContent = "Completa ECO, fecha y litros.";
+    errBox.classList.remove("hidden");
+    return;
+  }
+
+  showLoading("Guardando cambios...");
+  try {
+    const eq = catalogoEquipos.find(e => e.interno === eco);
+    const rendimiento = await getRendimiento(eco, horoRaw, litros);
+    const original = _getRegistroCache(id);
+
+    await window.fbUpdateDoc(window.fbDoc(window.firebaseDB, "registros", id), {
+      eco, fecha, litros,
+      maquinaria: eq ? eq.maquinaria : "",
+      horometroRaw: horoRaw,
+      rendimiento,
+      ticket: ticket || original?.ticket || ""
+    });
+
+    hideLoading();
+    cerrarModalEditar();
+    refrescarListaActual();
+  } catch (e) {
+    hideLoading();
+    errBox.textContent = "Error: " + e.message;
+    errBox.classList.remove("hidden");
+  }
+}
+
+/* --- CONCILIAR (solo Admin Maestro) --- */
+async function conciliarRegistro(id) {
+  if (!confirm("¿Conciliar este registro?\n\nYa no se podrá editar ni subir el ticket después. Esta acción es para administradores maestros.")) return;
+  showLoading("Conciliando registro...");
+  try {
+    await window.fbUpdateDoc(window.fbDoc(window.firebaseDB, "registros", id), { conciliado: true });
+    hideLoading();
+    refrescarListaActual();
+  } catch (e) { hideLoading(); alert("Error: " + e.message); }
+}
+
+/* --- HISTORIAL --- */
+async function loadHistory() {
+  const list = document.getElementById("history-list");
+  const fechaInput = document.getElementById("hist-fecha");
+  if (!fechaInput.value) fechaInput.value = new Date().toISOString().split("T")[0];
+  const fecha = fechaInput.value;
+
+  list.innerHTML = "Cargando...";
+  try {
+    const col = window.fbCollection(window.firebaseDB, "registros");
+    const q = window.fbQuery(col, window.fbWhere("fecha", "==", fecha));
+    const snap = await window.fbGetDocs(q);
+
+    window._historialCache = {};
+    if (snap.empty) { list.innerHTML = "<p>No hay registros para esta fecha.</p>"; return; }
+
+    list.innerHTML = "";
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      window._historialCache[docSnap.id] = d;
+
+      const esPendiente = d.status === "pendiente";
+      const esConciliado = d.conciliado === true;
+      const colorEstatus = esConciliado ? "var(--blue)" : (esPendiente ? "var(--orange)" : "var(--green)");
+      const txtEstatus = esConciliado ? "🔒 Conciliado" : (esPendiente ? "⏳ Pendiente" : "✅ Completado");
+
+      let botones = "";
+      if (!esConciliado) {
+        if (esPendiente) {
+          botones += `<button class="btn btn-outline btn-sm" onclick="abrirPendiente('${docSnap.id}')">📷 Subir Ticket</button>`;
+        }
+        if (isAdmin) {
+          botones += `<button class="btn btn-ghost btn-sm" onclick="abrirEditar('${docSnap.id}')">✏️ Editar</button>`;
+        }
+        if (isMaster) {
+          botones += `<button class="btn btn-ghost btn-sm" style="color:var(--blue); border:1px solid var(--blue);" onclick="conciliarRegistro('${docSnap.id}')">🔒 Conciliar</button>`;
+        }
+      }
+
+      list.innerHTML += `
+        <div class="history-card" style="cursor:default; ${esPendiente && !esConciliado ? 'border-left:4px solid var(--orange);' : ''}">
+          <div class="hc-header"><span>${d.eco}</span><span style="color:${colorEstatus};">${txtEstatus}</span></div>
+          <p style="color:var(--text-muted); font-size:12px; margin-top:5px;">
+            ${d.maquinaria || ""} • ${d.litros} L • Rend: ${d.rendimiento ?? "N/A"} L/h • Ticket: ${d.ticket || "—"}
+          </p>
+          ${botones ? `<div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">${botones}</div>` : ""}
+        </div>
+      `;
+    });
+  } catch (e) {
+    list.innerHTML = `<p style="color:var(--red);">❌ Error al cargar historial: ${e.message}</p>`;
+    console.error("loadHistory error:", e);
+  }
+}
+
+/* --- USUARIOS Y ROLES (solo Admin Maestro) --- */
+async function loadUsuarios() {
+  const list = document.getElementById("usuarios-list");
+  list.innerHTML = "Cargando usuarios...";
+  try {
+    const snap = await window.fbGetDocs(window.fbCollection(window.firebaseDB, "whitelist"));
+    window._usuariosCache = {};
+    if (snap.empty) { list.innerHTML = "<p>No hay usuarios registrados.</p>"; return; }
+
+    const rolLabels = { master: "🔑 Admin Maestro", admin: "🛡️ Admin General", capturista: "👷 Capturista", operador: "👷 Capturista" };
+
+    list.innerHTML = "";
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      window._usuariosCache[docSnap.id] = d;
+      const activo = d.activo !== false;
+      
+      // Limpiar correo falso en lista para que se vea solo el alias
+      let displayAlias = d.email || "";
+      if (displayAlias.endsWith("@rompeolas.app")) {
+        displayAlias = displayAlias.replace("@rompeolas.app", "");
+      }
+
+      list.innerHTML += `
+        <div class="history-card" style="cursor:pointer;" onclick="abrirUsuario('${docSnap.id}')">
+          <div class="hc-header"><span>${d.nombre || displayAlias}</span><span style="color:${activo ? 'var(--green)' : 'var(--red)'};">${activo ? '✅ Activo' : '⛔ Inactivo'}</span></div>
+          <p style="color:var(--text-muted); font-size:12px; margin-top:5px;">Alias: ${displayAlias} • ${rolLabels[d.rol] || "👷 Capturista"}</p>
+        </div>
+      `;
+    });
+  } catch (e) {
+    list.innerHTML = `<p style="color:var(--red);">❌ Error al cargar usuarios: ${e.message}</p>`;
+    console.error("loadUsuarios error:", e);
+  }
+}
+
+function abrirUsuario(docId) {
+  document.getElementById("usuario-error").classList.add("hidden");
+  const u = docId ? window._usuariosCache?.[docId] : null;
+
+  document.getElementById("usuario-modal-title").textContent = docId ? "Editar usuario" : "Nuevo usuario";
+  document.getElementById("usuario-doc-id").value = docId || "";
+  
+  // Limpiar el @rompeolas.app del input si ya existe un usuario
+  let displayUser = u?.email || "";
+  if (displayUser.endsWith("@rompeolas.app")) {
+    displayUser = displayUser.replace("@rompeolas.app", "");
+  }
+
+  document.getElementById("usuario-email").value = displayUser;
+  document.getElementById("usuario-email").disabled = !!docId; // No dejar cambiar el alias de un usuario ya creado
+  document.getElementById("usuario-nombre").value = u?.nombre || "";
+  document.getElementById("usuario-rol").value = u?.rol || "capturista";
+  document.getElementById("usuario-activo").checked = u ? (u.activo !== false) : true;
+
+  document.getElementById("modal-usuario").classList.remove("hidden");
+}
+
+function cerrarModalUsuario() {
+  document.getElementById("modal-usuario").classList.add("hidden");
+}
+
+async function guardarUsuario() {
+  const errBox = document.getElementById("usuario-error");
+  errBox.classList.add("hidden");
+
+  const docId = document.getElementById("usuario-doc-id").value;
+  const usernameInput = document.getElementById("usuario-email").value.trim().toLowerCase();
+  const nombre = document.getElementById("usuario-nombre").value.trim();
+  const rol = document.getElementById("usuario-rol").value;
+  const activo = document.getElementById("usuario-activo").checked;
+
+  if (!usernameInput) { errBox.textContent = "Ingresa un alias / usuario."; errBox.classList.remove("hidden"); return; }
+  if (!nombre) { errBox.textContent = "Ingresa el nombre del usuario."; errBox.classList.remove("hidden"); return; }
+
+  // Aquí creamos el correo falso que va a parar a la Base de Datos
+  const fakeEmail = usernameInput.includes("@") ? usernameInput : `${usernameInput}@rompeolas.app`;
+
+  showLoading("Guardando usuario...");
+  try {
+    if (docId) {
+      await window.fbUpdateDoc(window.fbDoc(window.firebaseDB, "whitelist", docId), { nombre, rol, activo });
+    } else {
+      await window.fbSetDoc(window.fbDoc(window.firebaseDB, "whitelist", fakeEmail), { email: fakeEmail, nombre, rol, activo });
+    }
+    hideLoading();
+    cerrarModalUsuario();
+    loadUsuarios();
+  } catch (e) {
+    hideLoading();
+    errBox.textContent = "Error: " + e.message;
+    errBox.classList.remove("hidden");
+  }
+}
+
+/* --- EXPORTAR CSV --- */
+async function exportCSV() {
+  showLoading("Generando CSV...");
+  try {
+    const col = window.fbCollection(window.firebaseDB, "registros");
+    const snap = await window.fbGetDocs(col);
+
+    if (snap.empty) { hideLoading(); alert("No hay registros para exportar."); return; }
+
+    const headers = ["Fecha", "ECO", "Maquinaria", "Litros", "Horometro", "Rendimiento(L/h)", "Ticket", "Estatus", "Usuario"];
+    const rows = [headers.join(",")];
+
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      
+      // Limpiar alias en exportación si se desea
+      let userClean = d.usuario || "";
+      if(userClean.endsWith("@rompeolas.app")) userClean = userClean.replace("@rompeolas.app", "");
+
+      const fila = [
+        d.fecha || "",
+        d.eco || "",
+        `"${(d.maquinaria || "").replace(/"/g, '""')}"`,
+        d.litros ?? "",
+        d.horometroRaw ?? "",
+        d.rendimiento ?? "",
+        d.ticket || "",
+        d.status || "",
+        userClean
+      ];
+      rows.push(fila.join(","));
+    });
+
+    const csvContent = rows.join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `FuelControl_Export_${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    hideLoading();
+  } catch (e) {
+    hideLoading();
+    alert("Error al exportar: " + e.message);
+  }
+}
+
+/* --- GENERAR PDF MAESTRO CON 3 FOTOS Y RENDIMIENTO --- */
+async function generateTicketPDF(record) {
+  if (!window.jspdf) {
+    await new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+      s.onload = res; document.head.appendChild(s);
+    });
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
+
+  const pageW = 8.5, pageH = 11, margin = 0.4;
+  const contentW = pageW - margin * 2;
+
+  const headerH = 1.4;
+  doc.setFillColor(28, 33, 40); doc.rect(0, 0, pageW, headerH, "F");
+  doc.setTextColor(232, 98, 10); doc.setFontSize(15); doc.setFont("helvetica", "bold");
+  doc.text("FuelControl — Evidencia de Carga", margin, 0.35);
+
+  doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(200, 200, 200);
+  doc.text(`ECO: ${record.eco}   |   Maquinaria: ${record.maquinaria}`, margin, 0.62);
+  doc.text(`Ticket: ${record.ticket}   |   Fecha: ${record.fecha}`, margin, 0.82);
+
+  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
+  doc.text(`Carga: ${record.litros} L   |   Rendimiento: ${record.rendimiento} L/h`, margin, 1.08);
+
+  const gap = 0.2;
+  const halfW = (contentW - gap) / 2;
+  const maxHTop = 4.6;
+  let y = headerH + 0.35;
+
+  const fotosTop = [
+    { label: "Bomba (Inicial)", data: record.fotoInicial, x: margin },
+    { label: "Bomba (Final)",   data: record.fotoFinal,   x: margin + halfW + gap }
+  ];
+
+  let maxBottomY = y;
+  fotosTop.forEach(f => {
+    if (!f.data) return;
+    doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
+    doc.text(f.label, f.x, y - 0.06);
+
+    const props = doc.getImageProperties(f.data);
+    let w = halfW, h = (props.height * w) / props.width;
+    if (h > maxHTop) { h = maxHTop; w = (props.width * h) / props.height; }
+
+    doc.addImage(f.data, "JPEG", f.x, y, w, h);
+    maxBottomY = Math.max(maxBottomY, y + h);
+  });
+
+  if (record.fotoTicket) {
+    const yTicket = maxBottomY + 0.4;
+    doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
+    doc.text("Ticket de Carga", margin, yTicket - 0.06);
+
+    const props = doc.getImageProperties(record.fotoTicket);
+    const maxHTicket = pageH - margin - yTicket;
+    let w = contentW, h = (props.height * w) / props.width;
+    if (h > maxHTicket) { h = maxHTicket; w = (props.width * h) / props.height; }
+
+    const xTicket = margin + (contentW - w) / 2;
+    doc.addImage(record.fotoTicket, "JPEG", xTicket, yTicket, w, h);
+  }
+
+  return doc;
+}
+
+function showLoading(msg="Procesando...") { document.getElementById("loading-text").textContent = msg; document.getElementById("loading-overlay").classList.remove("hidden"); }
+function hideLoading() { document.getElementById("loading-overlay").classList.add("hidden"); }
+
+// --- FUNCIÓN PARA RE-GENERAR Y DESCARGAR PDF DESDE LA SESIÓN MASTER ---
+function forceDownloadPDF(record) {
+  try {
+    showLoading("Generando PDF de respaldo...");
+    
+    // Verificamos si la librería jsPDF está cargada
+    if (typeof jspdf === 'undefined' && typeof jsPDF === 'undefined') {
+      throw new Error("Librería PDF no disponible en este momento.");
     }
 
-  
+    // Llamamos a tu función existente que fabrica el PDF
+    const pdfDoc = generateTicketPDF(record);
+    
+    // Descargamos el archivo con el nombre estándar
+    pdfDoc.save(`FuelControl_${record.eco}_${record.ticket}.pdf`);
+    
+    hideLoading();
+    alert("PDF descargado exitosamente.");
+  } catch (error) {
+    hideLoading();
+    alert("❌ Error al generar el PDF: " + error.message);
+  }
+}
+
+
+/* EXPORTACIONES PARA EL HTML */
+window.handleLogin = handleLogin;
+window.handleLogout = handleLogout;
+window.togglePassword = togglePassword;
+window.switchTab = switchTab;
+window.goStep = goStep;
+window.autoCompletarEquipo = autoCompletarEquipo;
+window.toggleHorometro = toggleHorometro;
+window.toggleTicket = toggleTicket;
+window.previewSurtidor = previewSurtidor;
+window.aceptarSurtidor = aceptarSurtidor;
+window.handleSubmit = handleSubmit;
+window.abrirPendiente = abrirPendiente;
+window.cerrarModalPendiente = cerrarModalPendiente;
+window.guardarPendiente = guardarPendiente;
+window.loadHistory = loadHistory;
+window.exportCSV = exportCSV;
+window.installApp = installApp;
+window.autoCompletarEquipoEdit = autoCompletarEquipoEdit;
+window.abrirEditar = abrirEditar;
+window.cerrarModalEditar = cerrarModalEditar;
+window.guardarEdicion = guardarEdicion;
+window.conciliarRegistro = conciliarRegistro;
+window.abrirUsuario = abrirUsuario;
+window.cerrarModalUsuario = cerrarModalUsuario;
+window.guardarUsuario = guardarUsuario;
