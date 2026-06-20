@@ -246,6 +246,7 @@ function previewSurtidor(event, tipo) {
       // Ocultar botón de cámara, mostrar zona de Aceptar/Repetir
       document.getElementById(`preview-box-${tipo}`).classList.remove("hidden");
       document.getElementById(`btn-cam-${tipo}`).classList.add("hidden");
+      document.getElementById(`btn-cam-${tipo}`).textContent = "🔄 Volver a tomar";
       document.getElementById(`ok-${tipo}`).classList.add("hidden"); // Ocultar palomita si se reintenta
       
       // Guardamos la foto en temporal (pero NO la marcamos como confirmada aún)
