@@ -117,8 +117,10 @@
               <button class="btn btn-success btn-sm" style="flex:1;" onclick="aceptarSurtidor('ini')">Aceptar ✔</button>
             </div>
           </div>
-          <div id="ok-ini" class="alert alert-success hidden" style="margin-top:10px;">✅ Foto Inicial Confirmada</div>
-        </div>
+<div id="ok-ini" class="alert alert-success hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+  <span>✅ Foto Inicial Confirmada</span>
+  <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-ini').click()">🔄 Volver a tomar</button>
+</div>
 
         <div class="field-group" style="background:var(--bg-elevated); padding:15px; border-radius:10px;">
           <label class="field-label">Cuenta litros FINAL</label>
@@ -134,8 +136,10 @@
               <button class="btn btn-success btn-sm" style="flex:1;" onclick="aceptarSurtidor('fin')">Aceptar ✔</button>
             </div>
           </div>
-          <div id="ok-fin" class="alert alert-success hidden" style="margin-top:10px;">✅ Foto Final Confirmada</div>
-        </div>
+<div id="ok-fin" class="alert alert-success hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+  <span>✅ Foto Final Confirmada</span>
+  <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-fin').click()">🔄 Volver a tomar</button>
+</div>
 
         <div class="step-nav">
           <button class="btn btn-ghost" onclick="goStep(1)">Atrás</button>
@@ -168,8 +172,10 @@
                 <button class="btn btn-success btn-sm" style="flex:1;" onclick="aceptarSurtidor('ticket')">Aceptar ✔</button>
               </div>
             </div>
-            <div id="ok-ticket" class="alert alert-success hidden" style="margin-top:10px;">✅ Ticket Confirmado</div>
-          </div>
+<div id="ok-ticket" class="alert alert-success hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+  <span>✅ Ticket Confirmado</span>
+  <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-ticket').click()">🔄 Volver a tomar</button>
+</div>
         </div>
 
         <div class="step-nav">
