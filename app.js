@@ -29,6 +29,120 @@ window.addEventListener("appinstalled", () => {
   document.getElementById("btn-install")?.classList.add("hidden");
 });
 
+/* ─────────────────────────────────────────────────────────────────
+   COLA OFFLINE — IndexedDB
+   Cuando no hay internet, los registros se guardan localmente y se
+   sincronizan automáticamente cuando vuelve la conexión.
+───────────────────────────────────────────────────────────────── */
+const IDB_NAME    = "FuelControlOffline";
+const IDB_VERSION = 1;
+const IDB_STORE   = "pendingRecords";
+
+function abrirIDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE, { keyPath: "localId", autoIncrement: true });
+      }
+    };
+    req.onsuccess = e => res(e.target.result);
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+async function guardarEnCola(record) {
+  const db    = await abrirIDB();
+  const tx    = db.transaction(IDB_STORE, "readwrite");
+  const store = tx.objectStore(IDB_STORE);
+  // creadoEn como ISO string porque Timestamp de Firebase no se serializa en IDB
+  const recordIDB = { ...record, creadoEn: new Date().toISOString(), _offline: true };
+  return new Promise((res, rej) => {
+    const req = store.add(recordIDB);
+    req.onsuccess = () => res(req.result);
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+async function leerCola() {
+  const db    = await abrirIDB();
+  const tx    = db.transaction(IDB_STORE, "readonly");
+  const store = tx.objectStore(IDB_STORE);
+  return new Promise((res, rej) => {
+    const req = store.getAll();
+    req.onsuccess = () => res(req.result);
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+async function eliminarDeCola(localId) {
+  const db    = await abrirIDB();
+  const tx    = db.transaction(IDB_STORE, "readwrite");
+  const store = tx.objectStore(IDB_STORE);
+  return new Promise((res, rej) => {
+    const req = store.delete(localId);
+    req.onsuccess = () => res();
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+// Intenta subir todos los registros pendientes en IDB a Firestore
+async function sincronizarCola() {
+  if (!navigator.onLine || !window.firebaseDB) return;
+  let pendientes;
+  try { pendientes = await leerCola(); } catch(e) { return; }
+  if (!pendientes.length) return;
+
+  actualizarBannerConexion(); // refresca el contador en el banner
+  for (const item of pendientes) {
+    try {
+      const { localId, _offline, creadoEn, ...record } = item;
+      // Restaurar Timestamp de Firebase
+      record.creadoEn = window.fbTimestamp
+        ? window.fbTimestamp.fromDate(new Date(creadoEn))
+        : new Date(creadoEn);
+
+      const docRef = window.fbDoc(window.fbCollection(window.firebaseDB, "registros"));
+      await window.fbSetDoc(docRef, record);
+      await eliminarDeCola(localId);
+      console.log(`✅ Sincronizado registro offline: ${record.eco} — ${record.fecha}`);
+    } catch(e) {
+      console.warn("No se pudo sincronizar registro offline:", e.message);
+    }
+  }
+  actualizarBannerConexion();
+  // Refrescamos historial si está visible
+  if (document.getElementById("content-historial")?.classList.contains("active")) loadHistory();
+}
+
+/* --- BANNER DE ESTADO DE CONEXIÓN --- */
+function actualizarBannerConexion() {
+  let banner = document.getElementById("banner-conexion");
+  if (!banner) return;
+
+  leerCola().then(pendientes => {
+    const n = pendientes.length;
+    if (!navigator.onLine) {
+      banner.style.display = "flex";
+      banner.style.background = "var(--red, #e8320a)";
+      banner.textContent = "📵 Sin conexión — los registros se guardarán localmente";
+    } else if (n > 0) {
+      banner.style.display = "flex";
+      banner.style.background = "var(--orange, #e8620a)";
+      banner.textContent = `🔄 Sincronizando ${n} registro${n > 1 ? "s" : ""} offline...`;
+    } else {
+      banner.style.display = "none";
+    }
+  }).catch(() => {
+    banner.style.display = "none";
+  });
+}
+
+// Escucha cambios de conectividad
+window.addEventListener("online",  () => { actualizarBannerConexion(); sincronizarCola(); });
+window.addEventListener("offline", () => actualizarBannerConexion());
+
 async function loadFirebase() {
   const { initializeApp }   = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js");
   const { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js");
@@ -155,6 +269,9 @@ function initAuth() {
       if (isMaster) document.getElementById("tab-usuarios").classList.remove("hidden");
 
       showScreen("app");
+      // Intentar sincronizar registros offline que quedaron pendientes
+      actualizarBannerConexion();
+      setTimeout(sincronizarCola, 1500); // pequeño delay para que Firebase esté listo
     } else {
       currentUser = null; showScreen("login");
     }
@@ -354,6 +471,15 @@ function validateStep(step) {
     const ci = parseFloat(document.getElementById("f-cuenta-inicial").value);
     if (isNaN(ci) || ci !== 0) { alert("❌ La cuenta litros inicial debe ser 0."); return false; }
     if(!document.getElementById("f-cuenta-final").value) { alert("Falta cuenta final"); return false; }
+    // FIX: validar que cuenta final sea mayor a cuenta inicial
+    const cf = parseFloat(document.getElementById("f-cuenta-final").value);
+    if (isNaN(cf) || cf <= ci) { alert("❌ La cuenta final debe ser mayor que la cuenta inicial (0)."); return false; }
+    // FIX: validar que litros capturados coincidan aproximadamente con la diferencia del contador
+    const difContador = cf - ci;
+    const litrosForm = parseFloat(document.getElementById("f-litros").value);
+    if (Math.abs(difContador - litrosForm) > 5) {
+      if (!confirm(`⚠️ Los litros capturados (${litrosForm} L) difieren de la diferencia del contador (${difContador.toFixed(1)} L).\n\n¿Deseas continuar de todas formas?`)) return false;
+    }
     if(!estadoFotos.ini) { alert("❌ Debes tomar y CONFIRMAR la foto Inicial."); return false; }
     if(!estadoFotos.fin) { alert("❌ Debes tomar y CONFIRMAR la foto Final."); return false; }
     return true;
@@ -370,35 +496,115 @@ function validateStep(step) {
 
 function buildSummary() {
   const isPendiente = document.getElementById("chk-ticket-despues").checked;
+  const eco        = document.getElementById("f-eco").value;
+  const maquinaria = document.getElementById("f-maquinaria").value;
+  const marca      = document.getElementById("f-marca").value;
+  const modelo     = document.getElementById("f-modelo").value;
+  const fecha      = document.getElementById("f-fecha").value;
+  const litros     = document.getElementById("f-litros").value;
+  const cuentaIni  = document.getElementById("f-cuenta-inicial").value;
+  const cuentaFin  = document.getElementById("f-cuenta-final").value;
+  const horometro  = document.getElementById("chk-sin-horometro").checked
+                     ? "Sin horómetro"
+                     : (document.getElementById("f-horometro").value || "—");
+  const tipoComb   = document.querySelector('input[name="tipo-combustible"]:checked')?.value || "—";
+  const ticket     = isPendiente ? "⏳ Pendiente" : (document.getElementById("f-ticket").value || "—");
+
+  // Verificación rápida de fotos confirmadas
+  const chkIni    = estadoFotos.ini    ? "✅" : "❌";
+  const chkFin    = estadoFotos.fin    ? "✅" : "❌";
+  const chkTicket = isPendiente ? "—" : (estadoFotos.ticket ? "✅" : "❌");
+
   const html = `
-    <div class="summary-row"><span class="summary-key">ECO</span><span class="summary-val highlight">${document.getElementById("f-eco").value}</span></div>
-    <div class="summary-row"><span class="summary-key">Litros</span><span class="summary-val">${document.getElementById("f-litros").value} L</span></div>
-    <div class="summary-row"><span class="summary-key">Estatus Ticket</span><span class="summary-val">${isPendiente ? "⏳ Pendiente" : "✅ Adjuntado"}</span></div>
+    <div class="summary-row"><span class="summary-key">Fecha</span><span class="summary-val">${fecha}</span></div>
+    <div class="summary-row"><span class="summary-key">ECO</span><span class="summary-val highlight">${eco}</span></div>
+    <div class="summary-row"><span class="summary-key">Maquinaria</span><span class="summary-val">${maquinaria}</span></div>
+    <div class="summary-row"><span class="summary-key">Marca / Modelo</span><span class="summary-val">${marca} ${modelo}</span></div>
+    <div class="summary-row"><span class="summary-key">Combustible</span><span class="summary-val">${tipoComb}</span></div>
+    <div class="summary-row"><span class="summary-key">Litros cargados</span><span class="summary-val highlight">${litros} L</span></div>
+    <div class="summary-row"><span class="summary-key">Contador Ini → Fin</span><span class="summary-val">${cuentaIni} → ${cuentaFin}</span></div>
+    <div class="summary-row"><span class="summary-key">Horómetro</span><span class="summary-val">${horometro}</span></div>
+    <div class="summary-row"><span class="summary-key">Ticket</span><span class="summary-val">${ticket}</span></div>
+    <div class="summary-row"><span class="summary-key">Foto Inicial</span><span class="summary-val">${chkIni} Confirmada</span></div>
+    <div class="summary-row"><span class="summary-key">Foto Final</span><span class="summary-val">${chkFin} Confirmada</span></div>
+    <div class="summary-row"><span class="summary-key">Foto Ticket</span><span class="summary-val">${chkTicket}${isPendiente ? " (se adjunta después)" : " Confirmada"}</span></div>
   `;
   document.getElementById("summary-card").innerHTML = html;
 }
 
 /* --- CALCULO RENDIMIENTO L/H --- */
-async function getRendimiento(ecoActual, horoRawActual, litrosActuales) {
+// FIX: Se agrega excludeDocId para que al editar un registro viejo no se compare
+// consigo mismo (traía el registro MÁS RECIENTE aunque fuera el propio).
+async function getRendimiento(ecoActual, horoRawActual, litrosActuales, excludeDocId = null) {
   if(!horoRawActual) return "N/A";
   try {
     const col = window.fbCollection(window.firebaseDB, "registros");
-    const q = window.fbQuery(col, window.fbWhere("eco", "==", ecoActual), window.fbOrderBy("creadoEn", "desc"), window.fbLimit(1));
+    // Traemos los últimos 5 del mismo ECO; así si el primero es el propio registro
+    // (caso edición) podemos saltar al siguiente con horómetro válido.
+    const q = window.fbQuery(col, window.fbWhere("eco", "==", ecoActual), window.fbOrderBy("creadoEn", "desc"), window.fbLimit(5));
     const snap = await window.fbGetDocs(q);
 
     if(!snap.empty) {
-      const prevData = snap.docs[0].data();
-      if(prevData.horometroRaw) {
-        const currentHoroDec = (Math.floor(horoRawActual / 10)) + ((horoRawActual % 10) / 10);
-        const prevHoroDec = (Math.floor(prevData.horometroRaw / 10)) + ((prevData.horometroRaw % 10) / 10);
-        const horasTrabajadas = currentHoroDec - prevHoroDec;
-        if(horasTrabajadas > 0) {
-          return (litrosActuales / horasTrabajadas).toFixed(2);
+      for (const docSnap of snap.docs) {
+        // Saltamos el documento que estamos editando para no compararnos con nosotros
+        if (excludeDocId && docSnap.id === excludeDocId) continue;
+        const prevData = docSnap.data();
+        if(prevData.horometroRaw) {
+          const currentHoroDec = (Math.floor(horoRawActual / 10)) + ((horoRawActual % 10) / 10);
+          const prevHoroDec = (Math.floor(prevData.horometroRaw / 10)) + ((prevData.horometroRaw % 10) / 10);
+          const horasTrabajadas = currentHoroDec - prevHoroDec;
+          if(horasTrabajadas > 0) {
+            return (litrosActuales / horasTrabajadas).toFixed(2);
+          }
         }
       }
     }
     return "Primer Registro";
   } catch(e) { return "N/A"; }
+}
+
+/* --- RESET DEL FORMULARIO (reemplaza location.reload para no cerrar sesión) --- */
+function resetFormulario() {
+  // Limpiar estado de fotos
+  dataFotos   = { ini: null, fin: null, ticket: null, pend: null };
+  estadoFotos = { ini: false, fin: false, ticket: false, pend: false };
+  currentStep = 1;
+
+  // Campos del formulario
+  document.getElementById("f-eco").value = "";
+  document.getElementById("f-maquinaria").value = "";
+  document.getElementById("f-marca").value = "";
+  document.getElementById("f-modelo").value = "";
+  document.getElementById("f-horometro").value = "";
+  document.getElementById("f-litros").value = "";
+  document.getElementById("f-cuenta-inicial").value = "";
+  document.getElementById("f-cuenta-final").value = "";
+  document.getElementById("f-ticket").value = "";
+  document.getElementById("horometro-badge").textContent = "— h";
+  document.getElementById("chk-sin-horometro").checked = false;
+  document.getElementById("chk-ticket-despues").checked = false;
+  document.getElementById("ticket-section").style.display = "block";
+  document.querySelector('input[name="tipo-combustible"]:checked') &&
+    (document.querySelector('input[name="tipo-combustible"]:checked').checked = false);
+
+  // Resetear UI de fotos
+  ["ini", "fin", "ticket"].forEach(tipo => {
+    document.getElementById(`preview-box-${tipo}`)?.classList.add("hidden");
+    document.getElementById(`ok-${tipo}`)?.classList.add("hidden");
+    document.getElementById(`btn-cam-${tipo}`)?.classList.remove("hidden");
+    const img = document.getElementById(`img-${tipo}`);
+    if (img) img.src = "";
+  });
+
+  // Volver al paso 1
+  for (let i = 1; i <= 4; i++) {
+    document.getElementById(`panel-step-${i}`)?.classList.toggle("active", i === 1);
+    document.getElementById(`step-dot-${i}`)?.classList.toggle("active", i === 1);
+    document.getElementById(`step-line-${i}`)?.classList.toggle("active", i === 1);
+  }
+
+  // Fecha de hoy de nuevo
+  document.getElementById("f-fecha").value = new Date().toISOString().split("T")[0];
 }
 
 /* --- GUARDAR A FIREBASE --- */
@@ -431,8 +637,23 @@ async function handleSubmit() {
       creadoEn: window.fbTimestamp.now()
     };
 
-    // 1. PRIMERO GUARDAMOS EN FIREBASE
-    await window.fbSetDoc(docRef, record);
+    // 1. INTENTAR GUARDAR EN FIREBASE; si no hay internet, guardar en cola offline
+    try {
+      await window.fbSetDoc(docRef, record);
+    } catch (firebaseErr) {
+      if (!navigator.onLine || firebaseErr.code === "unavailable" || firebaseErr.message.includes("offline")) {
+        // SIN INTERNET — guardar localmente
+        await guardarEnCola(record);
+        actualizarBannerConexion();
+        hideLoading();
+        alert("📵 Sin conexión — el registro se guardó localmente y se subirá automáticamente cuando vuelva internet.");
+        resetFormulario();
+        switchTab("historial");
+        return;
+      }
+      // Error real de Firebase (permisos, etc.) — propagar
+      throw firebaseErr;
+    }
 
     // 2. SOLO SI FIREBASE GUARDÓ CON ÉXITO, GENERAMOS EL PDF
     if(!isPendiente) {
@@ -443,7 +664,10 @@ async function handleSubmit() {
 
     hideLoading();
     alert(isPendiente ? "Guardado como PENDIENTE. (No se generó PDF aún)" : "Guardado con éxito en la nube y PDF descargado.");
-    location.reload();
+    // FIX: en lugar de location.reload() (que cierra sesión en Android),
+    // reseteamos el formulario y navegamos al historial para ver el registro recién creado.
+    resetFormulario();
+    switchTab("historial");
 
   } catch(e) { 
     hideLoading(); 
@@ -601,7 +825,8 @@ async function guardarEdicion() {
   showLoading("Guardando cambios...");
   try {
     const eq = catalogoEquipos.find(e => e.interno === eco);
-    const rendimiento = await getRendimiento(eco, horoRaw, litros);
+    // FIX: pasamos el id del doc actual para excluirlo del cálculo de rendimiento
+    const rendimiento = await getRendimiento(eco, horoRaw, litros, id);
     const original = _getRegistroCache(id);
 
     await window.fbUpdateDoc(window.fbDoc(window.firebaseDB, "registros", id), {
@@ -1003,3 +1228,5 @@ window.guardarUsuario = guardarUsuario;
 window.forceDownloadPDF = forceDownloadPDF;
 window.descargarPDFDesdeCache = descargarPDFDesdeCache;
 window.loadPendientes = loadPendientes;
+window.resetFormulario = resetFormulario;
+window.sincronizarCola = sincronizarCola;
