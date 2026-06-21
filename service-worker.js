@@ -8,7 +8,8 @@ const STATIC_ASSETS = [
   "./style.css",
   "./app.js",
   "./manifest.json",
-  "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Mono&display=swap"
+  "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",  // ← AGREGAR
+  "https://fonts.googleapis.com/..."
 ];
 
 const NETWORK_FIRST_PATTERNS = [/index\.html$/, /app\.js$/, /style\.css$/, /\/$/];
