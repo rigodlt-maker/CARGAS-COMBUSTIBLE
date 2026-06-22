@@ -648,7 +648,7 @@ const docRef = window.fbDoc(window.fbCollection(window.firebaseDB, "registros"))
       eco: eco,
       maquinaria: document.getElementById("f-maquinaria").value,
       litros: litros,
-      horometroRaw: horRaw,
+      horometroRaw: horoRaw,
       rendimiento: rendimiento,
       status: isPendiente ? "pendiente" : "completado",
       ticket: isPendiente ? "PENDIENTE" : document.getElementById("f-ticket").value,
