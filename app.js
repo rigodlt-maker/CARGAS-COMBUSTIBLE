@@ -1049,9 +1049,9 @@ async function guardarUsuario() {
   }
 }
 
-/* --- EXPORTAR CSV --- */
-async function exportCSV() {
-  showLoading("Generando CSV...");
+/* --- EXPORTAR xlsx --- */
+async function exportxlsx() {
+  showLoading("Generando xlsx...");
   try {
     const col = window.fbCollection(window.firebaseDB, "registros");
     const snap = await window.fbGetDocs(col);
@@ -1082,12 +1082,12 @@ async function exportCSV() {
       rows.push(fila.join(","));
     });
 
-    const csvContent = rows.join("\n");
-    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const xlsxContent = rows.join("\n");
+    const blob = new Blob(["\uFEFF" + xlsxContent], { type: "text/xlsx;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `FuelControl_Export_${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = `FuelControl_Export_${new Date().toISOString().split("T")[0]}.xlsx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1256,7 +1256,7 @@ window.abrirPendiente = abrirPendiente;
 window.cerrarModalPendiente = cerrarModalPendiente;
 window.guardarPendiente = guardarPendiente;
 window.loadHistory = loadHistory;
-window.exportCSV = exportCSV;
+window.exportxlsx = exportxlsx;
 window.installApp = installApp;
 window.autoCompletarEquipoEdit = autoCompletarEquipoEdit;
 window.abrirEditar = abrirEditar;
