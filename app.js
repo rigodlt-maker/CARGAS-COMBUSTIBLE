@@ -191,7 +191,8 @@ let estadoFotos = { ini: false, fin: false, ticket: false, pend: false };
 const catalogoEquipos = [
   { "maquinaria": "CAMION ARTICULADO", "marca": "CAT", "modelo": "745", "interno": "CAT-745-" },
   { "maquinaria": "CAMION ARTICULADO", "marca": "SANY", "modelo": "SAT40C", "interno": "SANY-SAT40C" },
-  { "maquinaria": "CARGADOR FRONTAL", "marca": "KOMATSU", "modelo": "WA600", "interno": "CFN-600-001" },
+  { "maquinaria": "CAMION ARTICULADO", "marca": "SANY", "modelo": "SAT40C", "interno": "SANY-SAT40C" },
+  { "maquinaria": "CARGADOR FRONTAL", "marca": "KOMATSU", "modelo": "WA600", "interno": "CFN-600-" },
   { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "320ELRR", "interno": "EHO-320-E" },
   { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "385 BL", "interno": "EHO-385-" },
   { "maquinaria": "EXCAVADORA", "marca": "KOMATSU", "modelo": "PC450-LC8", "interno": "EHO-450-" },
@@ -200,9 +201,26 @@ const catalogoEquipos = [
   { "maquinaria": "EXCAVADORA", "marca": "SANY", "modelo": "SY500H", "interno": "R-EHO-500" },
   { "maquinaria": "GRÚA", "marca": "LINKBELT", "modelo": "LS138", "interno": "GDO-138-X" },
   { "maquinaria": "MOTOCONFORMADORA", "marca": "SANY", "modelo": "SMG200C-8", "interno": "R-MOT-200-0" },
+  { "maquinaria": "MOTOCONFORMADORA", "marca": "SANY", "modelo": "SMG200C-8", "interno": "R-MOT-200-0" },
   { "maquinaria": "RETROEXCAVADORA", "marca": "JOHN DEERE", "modelo": "310L", "interno": "RHN-310-0" },
   { "maquinaria": "TRACTOR DE ORUGAS", "marca": "KOMATSU", "modelo": "D65EX-16", "interno": "R-TRO-D6-0" },
-  { "maquinaria": "VIBROCOMPACTADOR", "marca": "CAT", "modelo": "CS11GC", "interno": "VCM-S11-0" }
+  { "maquinaria": "VIBROCOMPACTADOR", "marca": "CAT", "modelo": "CS11GC", "interno": "VCM-S11-0" },
+  { "maquinaria": "CAMION ARTICULADO", "marca": "KOMATSU", "modelo": "HM400-3M0", "interno": "HM400-" },
+  { "maquinaria": "CARGADOR FRONTAL", "marca": "CAT", "modelo": "980K", "interno": "980K-" },
+  { "maquinaria": "CARGADOR FRONTAL", "marca": "CAT", "modelo": "980K", "interno": "980K-" },
+  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "352", "interno": "R-EHO-352" },
+  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "352", "interno": "CAT-352-" },
+  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "336", "interno": "R-EHO-336" },
+  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "336", "interno": "R-EHO-336" },
+  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "349 FL", "interno": "CAT 349FL" },
+  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "336-E", "interno": "336E " },
+  { "maquinaria": "EXCAVADORA", "marca": "JCB", "modelo": "JS385LC HD", "interno": "JS385-LC-" },
+  { "maquinaria": "EXCAVADORA", "marca": "JCB", "modelo": "JS385LC HD", "interno": "JS385-LC-" },
+  { "maquinaria": "EXCAVADORA", "marca": "JCB", "modelo": "JS385LC HD", "interno": "JS385-LC-" },
+  { "maquinaria": "EXCAVADORA", "marca": "JCB", "modelo": "JS385LC HD", "interno": "JS385-LC-" },
+  { "maquinaria": "EXCAVADORA", "marca": "KOMATSU", "modelo": "500 LC", "interno": "R-EHO-500-" },
+  { "maquinaria": "EXCAVADORA", "marca": "KOMATSU", "modelo": "PC490", "interno": "R-EHO-490" },
+  { "maquinaria": "TRACTOR DE ORUGAS", "marca": "CAT", "modelo": "D8", "interno": "CAT-D8-" }
 ];
 
 /* --- INIT --- */
