@@ -54,7 +54,7 @@ function abrirIDB() {
 
 async function guardarEnCola(record) {
   const db    = await abrirIDB();
-  const tx    = db.transaction(IDB_STORE, "readwrite");
+  const tx     = db.transaction(IDB_STORE, "readwrite");
   const store = tx.objectStore(IDB_STORE);
   // creadoEn como ISO string porque Timestamp de Firebase no se serializa en IDB
   const recordIDB = { ...record, creadoEn: new Date().toISOString(), _offline: true };
@@ -144,7 +144,7 @@ window.addEventListener("online",  () => { actualizarBannerConexion(); sincroniz
 window.addEventListener("offline", () => actualizarBannerConexion());
 
 async function loadFirebase() {
-  const { initializeApp }   = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js");
+  const { initializeApp }    = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js");
   const { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js");
   const { getFirestore, collection, addDoc, getDocs, getDoc, query, where, orderBy, Timestamp, limit, doc, updateDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
 
@@ -209,7 +209,7 @@ const catalogoEquipos = [
   { "maquinaria": "CARGADOR FRONTAL", "marca": "CAT", "modelo": "980K", "interno": "980K-001" },
   { "maquinaria": "CARGADOR FRONTAL", "marca": "CAT", "modelo": "980K", "interno": "980K-002" },
   { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "352", "interno": "R-EHO-352-005" },
-  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "352", "interno": "CAT-352-006-" },
+  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "352", "interno": "CAT-352-006" },
   { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "336", "interno": "R-EHO-336-018" },
   { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "336", "interno": "R-EHO-336-019" },
   { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "349 FL", "interno": "CAT 349FL-012" },
@@ -217,7 +217,7 @@ const catalogoEquipos = [
   { "maquinaria": "EXCAVADORA", "marca": "JCB", "modelo": "JS385LC HD", "interno": "JS385-LC-009" },
   { "maquinaria": "EXCAVADORA", "marca": "JCB", "modelo": "JS385LC HD", "interno": "JS385-LC-011" },
   { "maquinaria": "EXCAVADORA", "marca": "JCB", "modelo": "JS385LC HD", "interno": "JS385-LC-014" },
-  { "maquinaria": "EXCAVADORA", "marca": "JCB", "modelo": "JS385LC HD", "interno": "JS385-LC015-" },
+  { "maquinaria": "EXCAVADORA", "marca": "JCB", "modelo": "JS385LC HD", "interno": "JS385-LC-015" },
   { "maquinaria": "EXCAVADORA", "marca": "KOMATSU", "modelo": "500 LC", "interno": "R-EHO-500-008" },
   { "maquinaria": "EXCAVADORA", "marca": "KOMATSU", "modelo": "PC490", "interno": "R-EHO-490-017" },
   { "maquinaria": "TRACTOR DE ORUGAS", "marca": "CAT", "modelo": "D8", "interno": "CAT-D8-X" }
@@ -259,7 +259,7 @@ function autoCompletarEquipo() {
 function autoCompletarEquipoEdit() {
   const eco = document.getElementById("edit-eco").value;
   const eq = catalogoEquipos.find(e => e.interno === eco);
-  document.getElementById("edit-maquinaria").value = eq ? eq.maquinaria : "";
+  document.getElementById("edit-maquinaria").value = eq?.maquinaria || "";
 }
 
 /* --- AUTH Y ROLES --- */
@@ -635,7 +635,7 @@ async function handleSubmit() {
     const litros = parseFloat(document.getElementById("f-litros").value);
     const isPendiente = document.getElementById("chk-ticket-despues").checked;
 
-    const rendimiento = await getRendimiento(eco, horoRaw, litros);
+    const rendimiento = await getRendimiento(eco, horRaw, litros);
     const docRef = window.fbDoc(window.fbCollection(window.firebaseDB, "registros"));
 
     const record = {
@@ -643,7 +643,7 @@ async function handleSubmit() {
       eco: eco,
       maquinaria: document.getElementById("f-maquinaria").value,
       litros: litros,
-      horometroRaw: horoRaw,
+      horometroRaw: horRaw,
       rendimiento: rendimiento,
       status: isPendiente ? "pendiente" : "completado",
       ticket: isPendiente ? "PENDIENTE" : document.getElementById("f-ticket").value,
