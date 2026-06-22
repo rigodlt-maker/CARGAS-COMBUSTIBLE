@@ -281,8 +281,8 @@ function initAuth() {
       
       // Mostrar solo el alias en la barra superior
       let displayUser = user.email;
-      if(displayUser.endsWith("@grupoindi.com")) {
-        displayUser = displayUser.replace("@grupoindi.com", "");
+      if(displayUser.endsWith("@rompeolas.app")) {
+        displayUser = displayUser.replace("@rompeolas.app", "");
       }
       document.getElementById("header-user").textContent = displayUser;
 
@@ -321,7 +321,7 @@ async function handleLogin() {
   if(!username || !pw) return showLoginError("Ingresa usuario y contraseña.");
   
   // Le agregamos el dominio ficticio por detrás
-  const fakeEmail = `${username}@grupoindi.com`;
+  const fakeEmail = `${username}@rompeolas.app`;
 
   try { await window.fbSignIn(window.firebaseAuth, fakeEmail, pw); }
   catch(e) { showLoginError("Usuario o contraseña incorrectos."); }
@@ -955,8 +955,8 @@ async function loadUsuarios() {
       
       // Limpiar correo falso en lista para que se vea solo el alias
       let displayAlias = d.email || "";
-      if (displayAlias.endsWith("@grupoindi.com")) {
-        displayAlias = displayAlias.replace("@grupoindi.com", "");
+      if (displayAlias.endsWith("@rompeolas.app")) {
+        displayAlias = displayAlias.replace("@rompeolas.app", "");
       }
 
       list.innerHTML += `
@@ -979,10 +979,10 @@ function abrirUsuario(docId) {
   document.getElementById("usuario-modal-title").textContent = docId ? "Editar usuario" : "Nuevo usuario";
   document.getElementById("usuario-doc-id").value = docId || "";
   
-  // Limpiar el @grupoindi.com del input si ya existe un usuario
+  // Limpiar el @rompeolas.app del input si ya existe un usuario
   let displayUser = u?.email || "";
-  if (displayUser.endsWith("@grupoindi.com")) {
-    displayUser = displayUser.replace("@grupoindi.com", "");
+  if (displayUser.endsWith("@rompeolas.app")) {
+    displayUser = displayUser.replace("@rompeolas.app", "");
   }
 
   document.getElementById("usuario-email").value = displayUser;
@@ -1012,7 +1012,7 @@ async function guardarUsuario() {
   if (!nombre) { errBox.textContent = "Ingresa el nombre del usuario."; errBox.classList.remove("hidden"); return; }
 
   // Aquí creamos el correo falso que va a parar a la Base de Datos
-  const fakeEmail = usernameInput.includes("@") ? usernameInput : `${usernameInput}@grupoindi.com`;
+  const fakeEmail = usernameInput.includes("@") ? usernameInput : `${usernameInput}@rompeolas.app`;
 
   showLoading("Guardando usuario...");
   try {
@@ -1048,7 +1048,7 @@ async function exportCSV() {
       
       // Limpiar alias en exportación si se desea
       let userClean = d.usuario || "";
-      if(userClean.endsWith("@grupoindi.com")) userClean = userClean.replace("@grupoindi.com", "");
+      if(userClean.endsWith("@rompeolas.app")) userClean = userClean.replace("@rompeolas.app", "");
 
       const fila = [
         d.fecha || "",
