@@ -1106,42 +1106,46 @@ async function exportExcel() {
 
     if (snap.empty) { hideLoading(); alert("No hay registros para exportar."); return; }
 
-    const headers = ["Fecha", "ECO", "Maquinaria", "Litros", "Horometro", "Rendimiento(L/h)", "Ticket", "Estatus", "Usuario"];
+    const headers = ["Fecha", "ECO", "Maquinaria", "Litros", "Horometro", "Horometro Final", "Rendimiento(L/h)", "Ticket"];
     const filas = [headers];
 
     snap.forEach(docSnap => {
       const d = docSnap.data();
 
-      // Limpiar alias en exportación
-      let userClean = d.usuario || "";
-      if (userClean.endsWith("@grupoindi.com")) userClean = userClean.replace("@grupoindi.com", "");
+      // Convertir horómetro corrido a decimal con punto
+      // Formato: dígitos excepto el último = horas enteras, último dígito = décimas (6 min c/u)
+      // Ej: 105 → 10.5 | 180 → 18.0
+      let horoDecimal = "";
+      if (typeof d.horometroRaw === "number") {
+        const horas = Math.floor(d.horometroRaw / 10);
+        const decimas = d.horometroRaw % 10;
+        horoDecimal = parseFloat(`${horas}.${decimas}`);
+      }
 
       filas.push([
         d.fecha || "",
         d.eco || "",
         d.maquinaria || "",
         typeof d.litros === "number" ? d.litros : (parseFloat(d.litros) || ""),
-        typeof d.horometroRaw === "number" ? d.horometroRaw : (d.horometroRaw ?? ""),
+        horoDecimal,   // Horómetro con punto decimal
+        "",            // Horómetro Final — columna vacía para fórmula manual
         d.rendimiento ?? "",
-        d.ticket || "",
-        d.status || "",
-        userClean
+        d.ticket || ""
       ]);
     });
 
     const ws = window.XLSX.utils.aoa_to_sheet(filas);
 
-    // Ancho de columnas para que se vea bien sin tener que ajustarlo a mano
+    // Ancho de columnas
     ws["!cols"] = [
       { wch: 12 }, // Fecha
       { wch: 16 }, // ECO
       { wch: 22 }, // Maquinaria
       { wch: 10 }, // Litros
-      { wch: 12 }, // Horometro
+      { wch: 14 }, // Horometro
+      { wch: 16 }, // Horometro Final
       { wch: 16 }, // Rendimiento
       { wch: 14 }, // Ticket
-      { wch: 14 }, // Estatus
-      { wch: 16 }  // Usuario
     ];
 
     // Encabezados en negrita
