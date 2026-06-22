@@ -347,19 +347,28 @@ function switchTab(name) {
 
 /* --- LOGICA DE FORMULARIO --- */
 function setHorometroMode(sinHoro) {
-  // Actualiza el checkbox oculto (compatibilidad con el resto del código)
   document.getElementById("chk-sin-horometro").checked = sinHoro;
 
-  // Resalta el botón activo
   document.getElementById("btn-sin-horometro").classList.toggle("active", sinHoro);
   document.getElementById("btn-con-horometro").classList.toggle("active", !sinHoro);
 
   const input = document.getElementById("f-horometro");
   input.disabled = sinHoro;
 
+  // Mostrar u ocultar la sección de foto del horómetro
+  document.getElementById("horo-foto-section").style.display = sinHoro ? "none" : "block";
+
   if (sinHoro) {
     input.value = "";
     document.getElementById("horometro-badge").textContent = "N/A";
+    // Limpiar foto si se cambia a "Sin horómetro"
+    dataFotos.horo = null;
+    estadoFotos.horo = false;
+    document.getElementById("preview-box-horo")?.classList.add("hidden");
+    document.getElementById("ok-horo")?.classList.add("hidden");
+    document.getElementById("btn-cam-horo")?.classList.remove("hidden");
+    const imgHoro = document.getElementById("img-horo");
+    if (imgHoro) imgHoro.src = "";
   } else {
     document.getElementById("horometro-badge").textContent = "— h";
   }
@@ -500,8 +509,9 @@ function goStep(n) {
 function validateStep(step) {
   if(step === 1) {
     if(!document.getElementById("f-eco").value) { alert("Selecciona el ECO"); return false; }
-    if(!document.getElementById("chk-sin-horometro").checked && !document.getElementById("f-horometro").value) {
-      alert("Falta horómetro"); return false;
+    if(!document.getElementById("chk-sin-horometro").checked) {
+      if(!document.getElementById("f-horometro").value) { alert("Falta horómetro"); return false; }
+      if(!estadoFotos.horo) { alert("❌ Debes tomar y CONFIRMAR la foto del horómetro."); return false; }
     }
     return true;
   }
@@ -673,6 +683,7 @@ const docRef = window.fbDoc(window.fbCollection(window.firebaseDB, "registros"))
       fotoInicial: dataFotos.ini,
       fotoFinal: dataFotos.fin,
       fotoTicket: isPendiente ? null : dataFotos.ticket,
+      fotoHorometro: dataFotos.horo || null,
       usuario: currentUser.email,
       conciliado: false,
       creadoEn: window.fbTimestamp.now()
