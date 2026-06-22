@@ -640,8 +640,8 @@ async function handleSubmit() {
     const litros = parseFloat(document.getElementById("f-litros").value);
     const isPendiente = document.getElementById("chk-ticket-despues").checked;
 
-    const rendimiento = await getRendimiento(eco, horRaw, litros);
-    const docRef = window.fbDoc(window.fbCollection(window.firebaseDB, "registros"));
+    const rendimiento = await getRendimiento(eco, horoRaw, litros);
+const docRef = window.fbDoc(window.fbCollection(window.firebaseDB, "registros"));
 
     const record = {
       fecha: document.getElementById("f-fecha").value,
