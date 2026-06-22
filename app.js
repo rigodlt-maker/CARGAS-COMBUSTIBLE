@@ -1271,3 +1271,4 @@ window.descargarPDFDesdeCache = descargarPDFDesdeCache;
 window.loadPendientes = loadPendientes;
 window.resetFormulario = resetFormulario;
 window.sincronizarCola = sincronizarCola;
+window.setHorometroMode = setHorometroMode;
