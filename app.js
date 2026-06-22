@@ -638,14 +638,18 @@ function resetFormulario() {
   document.querySelector('input[name="tipo-combustible"]:checked') &&
     (document.querySelector('input[name="tipo-combustible"]:checked').checked = false);
 
-  // Resetear UI de fotos
-  ["ini", "fin", "ticket"].forEach(tipo => {
+ // Resetear UI de fotos
+  ["ini", "fin", "ticket", "horo"].forEach(tipo => {
     document.getElementById(`preview-box-${tipo}`)?.classList.add("hidden");
     document.getElementById(`ok-${tipo}`)?.classList.add("hidden");
     document.getElementById(`btn-cam-${tipo}`)?.classList.remove("hidden");
     const img = document.getElementById(`img-${tipo}`);
     if (img) img.src = "";
   });
+
+  // Restaurar sección de foto del horómetro
+  const horoSection = document.getElementById("horo-foto-section");
+  if (horoSection) horoSection.style.display = "block";
 
   // Volver al paso 1
   for (let i = 1; i <= 4; i++) {
@@ -1174,6 +1178,9 @@ async function generateTicketPDF(record) {
     { label: "Bomba (Final)",   data: record.fotoFinal,   x: margin + halfW + gap }
   ];
 
+  // Si existe foto del horómetro, la añadimos como fila completa antes del ticket
+  const tieneHoroFoto = !!record.fotoHorometro;
+
   // Placeholder reutilizable para cuando una foto no existe (registro viejo,
   // pendiente sin cerrar, error de carga, etc.) — así el PDF nunca truena.
   function dibujarPlaceholder(x, yPos, w, h, texto) {
@@ -1212,7 +1219,30 @@ async function generateTicketPDF(record) {
     maxBottomY = Math.max(maxBottomY, y + h);
   });
 
-  const yTicket = maxBottomY + 0.4;
+  let yDespuesFotos = maxBottomY + 0.4;
+
+  // --- FOTO HORÓMETRO (fila completa, debajo de las fotos de bomba) ---
+  if (tieneHoroFoto) {
+    doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
+    doc.text("Horómetro", margin, yDespuesFotos - 0.06);
+
+    let horoProps;
+    try { horoProps = doc.getImageProperties(record.fotoHorometro); } catch(e) { horoProps = null; }
+
+    if (horoProps) {
+      const maxHHoro = 2.8;
+      let hw = contentW * 0.55, hh = (horoProps.height * hw) / horoProps.width;
+      if (hh > maxHHoro) { hh = maxHHoro; hw = (horoProps.width * hh) / horoProps.height; }
+      const hx = margin + (contentW - hw) / 2;
+      doc.addImage(record.fotoHorometro, "JPEG", hx, yDespuesFotos, hw, hh);
+      yDespuesFotos = yDespuesFotos + hh + 0.4;
+    } else {
+      dibujarPlaceholder(margin, yDespuesFotos, contentW, 1.2, "Foto de horómetro inválida");
+      yDespuesFotos = yDespuesFotos + 1.2 + 0.4;
+    }
+  }
+
+  const yTicket = yDespuesFotos;
   doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
   doc.text("Ticket de Carga", margin, yTicket - 0.06);
 
