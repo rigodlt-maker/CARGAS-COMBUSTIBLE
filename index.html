@@ -89,8 +89,23 @@
           <div class="horometro-wrap">
             <input type="number" id="f-horometro" class="field-input" placeholder="Ej. 10002" />
             <div class="horometro-badge" id="horometro-badge">— h</div>
-          </div>
-          <label class="toggle-label" style="margin-top:10px;"><input type="checkbox" id="chk-sin-horometro" onchange="toggleHorometro()" /> Equipo sin horómetro</label>
+          </div>          
+         <div class="horo-toggle-group" style="margin-top:10px; display:flex; gap:8px;">
+  <button type="button"
+          id="btn-con-horometro"
+          class="btn-toggle-horo active"
+          onclick="setHorometroMode(false)">
+    ⏱ Con horómetro
+  </button>
+  <button type="button"
+          id="btn-sin-horometro"
+          class="btn-toggle-horo"
+          onclick="setHorometroMode(true)">
+    🚫 Sin horómetro
+  </button>
+</div>
+<!-- Checkbox oculto: se mantiene para no romper el resto del código que lo consulta -->
+<input type="checkbox" id="chk-sin-horometro" class="hidden" style="display:none;" /> 
         </div>
         <button class="btn btn-primary btn-next" onclick="goStep(2)">Siguiente</button>
       </div>
