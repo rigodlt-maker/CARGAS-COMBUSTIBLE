@@ -1049,49 +1049,75 @@ async function guardarUsuario() {
   }
 }
 
-/* --- EXPORTAR xlsx --- */
-async function exportxlsx() {
-  showLoading("Generando xlsx...");
+/* --- EXPORTAR EXCEL (XLSX) --- */
+async function exportExcel() {
+  showLoading("Generando Excel...");
   try {
+    // Cargar SheetJS desde CDN si aún no está disponible
+    if (!window.XLSX) {
+      await new Promise((res, rej) => {
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+        s.onload = res;
+        s.onerror = () => rej(new Error("No se pudo cargar la librería de Excel."));
+        document.head.appendChild(s);
+      });
+    }
+
     const col = window.fbCollection(window.firebaseDB, "registros");
     const snap = await window.fbGetDocs(col);
 
     if (snap.empty) { hideLoading(); alert("No hay registros para exportar."); return; }
 
     const headers = ["Fecha", "ECO", "Maquinaria", "Litros", "Horometro", "Rendimiento(L/h)", "Ticket", "Estatus", "Usuario"];
-    const rows = [headers.join(",")];
+    const filas = [headers];
 
     snap.forEach(docSnap => {
       const d = docSnap.data();
-      
-      // Limpiar alias en exportación si se desea
-      let userClean = d.usuario || "";
-      if(userClean.endsWith("@grupoindi.com")) userClean = userClean.replace("@grupoindi.com", "");
 
-      const fila = [
+      // Limpiar alias en exportación
+      let userClean = d.usuario || "";
+      if (userClean.endsWith("@grupoindi.com")) userClean = userClean.replace("@grupoindi.com", "");
+
+      filas.push([
         d.fecha || "",
         d.eco || "",
-        `"${(d.maquinaria || "").replace(/"/g, '""')}"`,
-        d.litros ?? "",
-        d.horometroRaw ?? "",
+        d.maquinaria || "",
+        typeof d.litros === "number" ? d.litros : (parseFloat(d.litros) || ""),
+        typeof d.horometroRaw === "number" ? d.horometroRaw : (d.horometroRaw ?? ""),
         d.rendimiento ?? "",
         d.ticket || "",
         d.status || "",
         userClean
-      ];
-      rows.push(fila.join(","));
+      ]);
     });
 
-    const xlsxContent = rows.join("\n");
-    const blob = new Blob(["\uFEFF" + xlsxContent], { type: "text/xlsx;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `FuelControl_Export_${new Date().toISOString().split("T")[0]}.xlsx`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const ws = window.XLSX.utils.aoa_to_sheet(filas);
+
+    // Ancho de columnas para que se vea bien sin tener que ajustarlo a mano
+    ws["!cols"] = [
+      { wch: 12 }, // Fecha
+      { wch: 16 }, // ECO
+      { wch: 22 }, // Maquinaria
+      { wch: 10 }, // Litros
+      { wch: 12 }, // Horometro
+      { wch: 16 }, // Rendimiento
+      { wch: 14 }, // Ticket
+      { wch: 14 }, // Estatus
+      { wch: 16 }  // Usuario
+    ];
+
+    // Encabezados en negrita
+    const rangoEncabezado = window.XLSX.utils.decode_range(ws["!ref"]);
+    for (let c = rangoEncabezado.s.c; c <= rangoEncabezado.e.c; c++) {
+      const celda = ws[window.XLSX.utils.encode_cell({ r: 0, c })];
+      if (celda) celda.s = { font: { bold: true } };
+    }
+
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, "Registros");
+
+    window.XLSX.writeFile(wb, `FuelControl_Export_${new Date().toISOString().split("T")[0]}.xlsx`);
 
     hideLoading();
   } catch (e) {
@@ -1256,7 +1282,7 @@ window.abrirPendiente = abrirPendiente;
 window.cerrarModalPendiente = cerrarModalPendiente;
 window.guardarPendiente = guardarPendiente;
 window.loadHistory = loadHistory;
-window.exportxlsx = exportxlsx;
+window.exportExcel = exportExcel;
 window.installApp = installApp;
 window.autoCompletarEquipoEdit = autoCompletarEquipoEdit;
 window.abrirEditar = abrirEditar;
