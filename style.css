@@ -253,6 +253,32 @@ html, body {
   color: var(--orange); white-space: nowrap;
 }
 
+/* Botones toggle "Con horómetro" / "Sin horómetro"
+   Sustituyen al checkbox de texto plano para que se vea claramente
+   que es una opción que se puede elegir y cambiar en cualquier momento. */
+.horo-toggle-group { display: flex; gap: 8px; }
+.btn-toggle-horo {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  text-align: center;
+}
+.btn-toggle-horo:hover { border-color: var(--orange); color: var(--text); }
+.btn-toggle-horo.active {
+  background: var(--orange);
+  border-color: var(--orange);
+  color: #fff;
+  box-shadow: 0 0 12px var(--orange-glow);
+}
+
 .toggle-row { margin-top: 8px; }
 .toggle-label {
   display: flex; align-items: center; gap: 10px;
