@@ -439,7 +439,7 @@ function compressImageToTarget(dataUrl, targetBytes, callback) {
 // Tamaño objetivo por tipo de foto. Los tickets suelen llevar texto impreso
 // pequeño, así que les dejamos un poco más de margen que a las fotos de bomba
 // (donde solo hace falta leer el dígito del contador).
-const TARGET_BYTES_FOTO = { ini: 140 * 1024, fin: 140 * 1024, ticket: 220 * 1024, pend: 220 * 1024 };
+const TARGET_BYTES_FOTO = { ini: 140 * 1024, fin: 140 * 1024, ticket: 220 * 1024, pend: 220 * 1024, horo: 140 * 1024 };
 
 // Límite de seguridad para la suma de las fotos de un registro. Lo dejamos con
 // margen real bajo el límite duro de Firestore (~1 MiB ≈ 1048576 bytes) para
