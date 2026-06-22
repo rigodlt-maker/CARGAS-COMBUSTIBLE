@@ -346,11 +346,29 @@ function switchTab(name) {
 }
 
 /* --- LOGICA DE FORMULARIO --- */
-function toggleHorometro() {
-  const sinHoro = document.getElementById("chk-sin-horometro").checked;
+function setHorometroMode(sinHoro) {
+  // Actualiza el checkbox oculto (compatibilidad con el resto del código)
+  document.getElementById("chk-sin-horometro").checked = sinHoro;
+
+  // Resalta el botón activo
+  document.getElementById("btn-sin-horometro").classList.toggle("active", sinHoro);
+  document.getElementById("btn-con-horometro").classList.toggle("active", !sinHoro);
+
   const input = document.getElementById("f-horometro");
   input.disabled = sinHoro;
-  if(sinHoro) { input.value = ""; document.getElementById("horometro-badge").textContent="N/A"; }
+
+  if (sinHoro) {
+    input.value = "";
+    document.getElementById("horometro-badge").textContent = "N/A";
+  } else {
+    document.getElementById("horometro-badge").textContent = "— h";
+  }
+}
+
+// Se mantiene por compatibilidad si algo más en tu código llama a toggleHorometro()
+function toggleHorometro() {
+  const sinHoro = document.getElementById("chk-sin-horometro").checked;
+  setHorometroMode(sinHoro);
 }
 function updateHorometroBadge() {
   const val = document.getElementById("f-horometro").value;
