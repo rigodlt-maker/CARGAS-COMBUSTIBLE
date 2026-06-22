@@ -185,8 +185,8 @@ let currentStep = 1;
 let isAdmin = false;
 let isMaster = false;
 
-let dataFotos = { ini: null, fin: null, ticket: null, pend: null };
-let estadoFotos = { ini: false, fin: false, ticket: false, pend: false };
+let dataFotos = { ini: null, fin: null, ticket: null, pend: null, horo: null };
+let estadoFotos = { ini: false, fin: false, ticket: false, pend: false, horo: false };
 
 const catalogoEquipos = [
   { "maquinaria": "CAMION ARTICULADO", "marca": "CAT", "modelo": "745", "interno": "CAT-745-001" },
