@@ -221,7 +221,12 @@ const catalogoEquipos = [
   { "maquinaria": "EXCAVADORA", "marca": "KOMATSU", "modelo": "500 LC", "interno": "R-EHO-500-008" },
   { "maquinaria": "EXCAVADORA", "marca": "KOMATSU", "modelo": "PC490", "interno": "R-EHO-490-017" },
   { "maquinaria": "TRACTOR DE ORUGAS", "marca": "CAT", "modelo": "D8", "interno": "CAT-D8-X" }
-];
+].map(e => ({
+  maquinaria: (e.maquinaria || "").trim(),
+  marca:      (e.marca      || "").trim(),
+  modelo:     (e.modelo     || "").trim(),
+  interno:    (e.interno    || "").trim()
+}));
 
 /* --- INIT --- */
 cargarSelectorEquipos("f-eco");
