@@ -587,31 +587,53 @@ function buildSummary() {
 // FIX: Se agrega excludeDocId para que al editar un registro viejo no se compare
 // consigo mismo (traía el registro MÁS RECIENTE aunque fuera el propio).
 async function getRendimiento(ecoActual, horoRawActual, litrosActuales, excludeDocId = null) {
-  if(!horoRawActual) return "N/A";
+  // Sin horómetro actual no se puede calcular diferencia de horas
+  if (!horoRawActual) return "N/A";
   try {
     const col = window.fbCollection(window.firebaseDB, "registros");
-    // Traemos los últimos 5 del mismo ECO; así si el primero es el propio registro
-    // (caso edición) podemos saltar al siguiente con horómetro válido.
-    const q = window.fbQuery(col, window.fbWhere("eco", "==", ecoActual), window.fbOrderBy("creadoEn", "desc"), window.fbLimit(5));
+    const q = window.fbQuery(
+  col,
+  window.fbWhere("eco", "==", ecoActual),
+  window.fbOrderBy("horometroRaw", "desc"),
+  window.fbLimit(10)
+);
     const snap = await window.fbGetDocs(q);
+    if (snap.empty) return "Primer Registro";
 
-    if(!snap.empty) {
-      for (const docSnap of snap.docs) {
-        // Saltamos el documento que estamos editando para no compararnos con nosotros
-        if (excludeDocId && docSnap.id === excludeDocId) continue;
-        const prevData = docSnap.data();
-        if(prevData.horometroRaw) {
-          const currentHoroDec = (Math.floor(horoRawActual / 10)) + ((horoRawActual % 10) / 10);
-          const prevHoroDec = (Math.floor(prevData.horometroRaw / 10)) + ((prevData.horometroRaw % 10) / 10);
-          const horasTrabajadas = currentHoroDec - prevHoroDec;
-          if(horasTrabajadas > 0) {
-            return (litrosActuales / horasTrabajadas).toFixed(2);
-          }
-        }
-      }
+    // Convertir horómetro "corrido" a horas decimales
+    // Formato: los dígitos excepto el último = horas, el último = décimas (cada una = 6 min)
+    function horoADecimal(raw) {
+      return Math.floor(raw / 10) + (raw % 10) / 10;
     }
+
+    const horoActualDec = horoADecimal(horoRawActual);
+
+    // Buscamos el registro anterior más reciente del mismo ECO
+    // que tenga horómetro válido y sea distinto al que estamos editando
+    for (const docSnap of snap.docs) {
+      if (excludeDocId && docSnap.id === excludeDocId) continue;
+
+      const prev = docSnap.data();
+      if (!prev.horometroRaw) continue;
+
+      const horoPrevDec = horoADecimal(prev.horometroRaw);
+      const horasTrabajadas = horoActualDec - horoPrevDec;
+
+      // El horómetro actual debe ser mayor al anterior (sanidad)
+      if (horasTrabajadas <= 0) continue;
+
+      // ✅ CLAVE: el rendimiento usa los LITROS DEL REGISTRO ANTERIOR
+      // (lo que consumió la máquina entre esa carga y la carga actual)
+      const litrosPrevios = prev.litros;
+      if (!litrosPrevios || litrosPrevios <= 0) continue;
+
+      return (litrosPrevios / horasTrabajadas).toFixed(2);
+    }
+
     return "Primer Registro";
-  } catch(e) { return "N/A"; }
+  } catch (e) {
+    return "N/A";
+  }
 }
 
 /* --- RESET DEL FORMULARIO (reemplaza location.reload para no cerrar sesión) --- */
