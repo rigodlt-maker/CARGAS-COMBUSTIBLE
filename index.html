@@ -105,7 +105,24 @@
   </button>
 </div>
 <!-- Checkbox oculto: se mantiene para no romper el resto del código que lo consulta -->
-<input type="checkbox" id="chk-sin-horometro" class="hidden" style="display:none;" /> 
+<input type="checkbox" id="chk-sin-horometro" class="hidden" style="display:none;" />
+
+        <!-- FOTO HORÓMETRO -->
+        <div id="horo-foto-section" style="margin-top:12px;">
+          <button class="btn btn-outline btn-sm" id="btn-cam-horo" onclick="document.getElementById('file-horo').click()" style="width:100%;">📷 Tomar Foto del Horómetro</button>
+          <input type="file" id="file-horo" accept="image/*" capture="environment" style="display:none" onchange="previewSurtidor(event, 'horo')" />
+          <div id="preview-box-horo" class="hidden" style="margin-top:10px; text-align:center;">
+            <img id="img-horo" style="max-width:100%; border-radius:8px;" />
+            <div style="display:flex; gap:10px; margin-top:10px;">
+              <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="document.getElementById('file-horo').click()">Repetir</button>
+              <button class="btn btn-success btn-sm" style="flex:1;" onclick="aceptarSurtidor('horo')">Aceptar ✔</button>
+            </div>
+          </div>
+          <div id="ok-horo" class="alert alert-success hidden" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <span>✅ Foto Horómetro Confirmada</span>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-horo').click()">🔄 Volver a tomar</button>
+          </div>
+        </div>
         </div>
         <button class="btn btn-primary btn-next" onclick="goStep(2)">Siguiente</button>
       </div>
