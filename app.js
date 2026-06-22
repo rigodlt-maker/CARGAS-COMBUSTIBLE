@@ -1106,16 +1106,14 @@ async function exportExcel() {
 
     if (snap.empty) { hideLoading(); alert("No hay registros para exportar."); return; }
 
-    const headers = ["Fecha", "ECO", "Maquinaria", "Litros", "Horometro", "Horometro Final", "Rendimiento(L/h)", "Ticket"];
+   const headers = ["# Economico", "Fecha Carga", "Horometro Inicial", "Carga (Litros)", "Combustible", "Ticket"];
     const filas = [headers];
 
     snap.forEach(docSnap => {
       const d = docSnap.data();
 
-      // Convertir horómetro corrido a decimal con punto
-      // Formato: dígitos excepto el último = horas enteras, último dígito = décimas (6 min c/u)
-      // Ej: 105 → 10.5 | 180 → 18.0
-      let horoDecimal = "";
+      // Horómetro con último dígito como decimal. Si no tiene horómetro → 0
+      let horoDecimal = 0;
       if (typeof d.horometroRaw === "number") {
         const horas = Math.floor(d.horometroRaw / 10);
         const decimas = d.horometroRaw % 10;
@@ -1123,28 +1121,23 @@ async function exportExcel() {
       }
 
       filas.push([
-        d.fecha || "",
         d.eco || "",
-        d.maquinaria || "",
+        d.fecha || "",
+        horoDecimal,
         typeof d.litros === "number" ? d.litros : (parseFloat(d.litros) || ""),
-        horoDecimal,   // Horómetro con punto decimal
-        "",            // Horómetro Final — columna vacía para fórmula manual
-        d.rendimiento ?? "",
+        d.tipoCombustible || "",
         d.ticket || ""
       ]);
     });
 
     const ws = window.XLSX.utils.aoa_to_sheet(filas);
 
-    // Ancho de columnas
     ws["!cols"] = [
-      { wch: 12 }, // Fecha
-      { wch: 16 }, // ECO
-      { wch: 22 }, // Maquinaria
-      { wch: 10 }, // Litros
-      { wch: 14 }, // Horometro
-      { wch: 16 }, // Horometro Final
-      { wch: 16 }, // Rendimiento
+      { wch: 18 }, // # Economico
+      { wch: 14 }, // Fecha Carga
+      { wch: 18 }, // Horometro Inicial
+      { wch: 14 }, // Carga (Litros)
+      { wch: 12 }, // Combustible
       { wch: 14 }, // Ticket
     ];
 
