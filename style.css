@@ -255,28 +255,30 @@ html, body {
 
 /* Botones toggle "Con horómetro" / "Sin horómetro"
    Sustituyen al checkbox de texto plano para que se vea claramente
-   que es una opción que se puede elegir y cambiar en cualquier momento. */
-.horo-toggle-group { display: flex; gap: 8px; }
+   que es una opción que se puede elegir y cambiar en cualquier momento.
+   Estilo "pill" compacto, mismo naranja que el resto de la app. */
+.horo-toggle-group { display: flex; gap: 6px; }
 .btn-toggle-horo {
   flex: 1;
-  padding: 10px 12px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
-  color: var(--text-muted);
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--orange-glow);
+  background: transparent;
+  color: var(--orange);
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: var(--transition);
   text-align: center;
+  white-space: nowrap;
 }
-.btn-toggle-horo:hover { border-color: var(--orange); color: var(--text); }
+.btn-toggle-horo:hover { background: var(--orange-dim); }
 .btn-toggle-horo.active {
   background: var(--orange);
   border-color: var(--orange);
   color: #fff;
-  box-shadow: 0 0 12px var(--orange-glow);
+  box-shadow: 0 2px 10px rgba(232,98,10,0.35);
 }
 
 .toggle-row { margin-top: 8px; }
