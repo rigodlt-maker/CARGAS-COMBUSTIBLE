@@ -697,7 +697,7 @@ async function handleSubmit() {
     const rendimiento = await getRendimiento(eco, horoRaw, litros);
 const docRef = window.fbDoc(window.fbCollection(window.firebaseDB, "registros"));
 
-    const record = {
+   const record = {
       fecha: document.getElementById("f-fecha").value,
       eco: eco,
       maquinaria: document.getElementById("f-maquinaria").value,
@@ -712,7 +712,8 @@ const docRef = window.fbDoc(window.fbCollection(window.firebaseDB, "registros"))
       fotoHorometro: dataFotos.horo || null,
       usuario: currentUser.email,
       conciliado: false,
-      creadoEn: window.fbTimestamp.now()
+      creadoEn: window.fbTimestamp.now(),
+      tipoCombustible: document.querySelector('input[name="tipo-combustible"]:checked')?.value || "",
     };
 
     // 1. INTENTAR GUARDAR EN FIREBASE; si no hay internet, guardar en cola offline
