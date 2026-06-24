@@ -59,6 +59,7 @@
     <button class="tab-btn" onclick="switchTab('historial')" id="tab-historial">Historial</button>
     <button class="tab-btn hidden" onclick="switchTab('pendientes')" id="tab-pendientes" style="color: var(--orange);">Pendientes ⚠</button>
     <button class="tab-btn hidden" onclick="switchTab('usuarios')" id="tab-usuarios" style="color: var(--blue);">👤 Usuarios</button>
+    <button class="tab-btn hidden" onclick="switchTab('graficos')" id="tab-graficos">📊 Gráficos</button>
     <button class="tab-btn" onclick="switchTab('exportar')" id="tab-exportar">Exportar</button>
   </nav>
 
@@ -272,6 +273,15 @@
       <div class="list-header"><h2>Usuarios y Roles</h2><p>Solo visible para el Administrador Maestro.</p></div>
       <button class="btn btn-primary" onclick="abrirUsuario()" style="margin-bottom:15px; width:100%;">+ Nuevo usuario</button>
       <div id="usuarios-list" class="history-list"></div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="content-graficos">
+    <div class="list-container">
+      <div class="list-header"><h2>📊 Gráficos</h2><p>Solo visible para Administrador General y Administrador Maestro.</p></div>
+      <div style="text-align:center; padding:40px 15px; color: var(--text-muted);">
+        <p style="font-size:14px;">Esta sección estará disponible próximamente.</p>
+      </div>
     </div>
   </div>
 
