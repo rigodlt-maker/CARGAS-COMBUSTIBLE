@@ -1221,19 +1221,6 @@ async function generateTicketPDF(record) {
   doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
   doc.text(`Carga: ${record.litros} L   |   Rendimiento: ${record.rendimiento} L/h`, margin, 1.08);
 
-  const gap = 0.2;
-  const halfW = (contentW - gap) / 2;
-  const maxHTop = 4.6;
-  let y = headerH + 0.35;
-
-  const fotosTop = [
-    { label: "Bomba (Inicial)", data: record.fotoInicial, x: margin },
-    { label: "Bomba (Final)",   data: record.fotoFinal,   x: margin + halfW + gap }
-  ];
-
-  // Si existe foto del horómetro, la añadimos como fila completa antes del ticket
-  const tieneHoroFoto = !!record.fotoHorometro;
-
   // Placeholder reutilizable para cuando una foto no existe (registro viejo,
   // pendiente sin cerrar, error de carga, etc.) — así el PDF nunca truena.
   function dibujarPlaceholder(x, yPos, w, h, texto) {
@@ -1244,79 +1231,108 @@ async function generateTicketPDF(record) {
     doc.text(texto, x + w / 2, yPos + h / 2, { align: "center" });
   }
 
-  let maxBottomY = y;
-  fotosTop.forEach(f => {
+  // Dibuja una foto dentro de un cuadro de tamaño fijo (w x h), centrada y
+  // sin deformarse (letterbox: se ajusta al lado que limite y se centra).
+  function dibujarFotoEnCaja(data, x, yPos, w, h, label, textoFaltante) {
     doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
-    doc.text(f.label, f.x, y - 0.06);
+    doc.text(label, x, yPos - 0.08);
 
-    if (!f.data) {
-      const hPlaceholder = 2.2;
-      dibujarPlaceholder(f.x, y, halfW, hPlaceholder, "Foto no disponible");
-      maxBottomY = Math.max(maxBottomY, y + hPlaceholder);
+    if (!data) {
+      dibujarPlaceholder(x, yPos, w, h, textoFaltante || "Foto no disponible");
       return;
     }
-
     let props;
-    try { props = doc.getImageProperties(f.data); }
+    try { props = doc.getImageProperties(data); }
     catch (err) {
-      const hPlaceholder = 2.2;
-      dibujarPlaceholder(f.x, y, halfW, hPlaceholder, "Foto inválida o corrupta");
-      maxBottomY = Math.max(maxBottomY, y + hPlaceholder);
+      dibujarPlaceholder(x, yPos, w, h, "Foto inválida o corrupta");
       return;
     }
 
-    let w = halfW, h = (props.height * w) / props.width;
-    if (h > maxHTop) { h = maxHTop; w = (props.width * h) / props.height; }
+    // Encajar manteniendo proporción dentro de w x h (sin recortar ni deformar)
+    let dw = w, dh = (props.height * dw) / props.width;
+    if (dh > h) { dh = h; dw = (props.width * dh) / props.height; }
+    const dx = x + (w - dw) / 2;
+    const dy = yPos + (h - dh) / 2;
 
-    doc.addImage(f.data, "JPEG", f.x, y, w, h);
-    maxBottomY = Math.max(maxBottomY, y + h);
+    // Marco tenue del tamaño de la caja, para que todas las fotos del
+    // mismo bloque se vean alineadas aunque su proporción real varíe.
+    doc.setDrawColor(225, 225, 225);
+    doc.rect(x, yPos, w, h);
+    doc.addImage(data, "JPEG", dx, dy, dw, dh);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LAYOUT (según boceto): columna izquierda con cuadros apilados
+  // (Bomba Inicial / Bomba Final / Horómetro si aplica), y columna
+  // derecha con el Ticket en un rectángulo vertical que ocupa toda
+  // la altura disponible de la página.
+  // ═══════════════════════════════════════════════════════════════
+  const tieneHoroFoto = !!record.fotoHorometro;
+  const sinHorometro = record.horometroRaw === null || record.horometroRaw === undefined;
+
+  const gap = 0.25;
+  const yInicio = headerH + 0.35;
+  const yFinPagina = pageH - margin;
+  const alturaDisponible = yFinPagina - yInicio;
+
+  // Ancho de columnas: izquierda ~52%, derecha ~48% (el ticket es alargado)
+  const colIzqW = contentW * 0.50;
+  const colDerW = contentW - colIzqW - gap;
+  const xIzq = margin;
+  const xDer = margin + colIzqW + gap;
+
+  // Cuántos cuadros van en la columna izquierda: 3 si hay foto de horómetro
+  // (variante "Con horómetro" del boceto), 2 si no (variante "Sin horómetro").
+  const bloquesIzq = tieneHoroFoto
+    ? [
+        { label: "Bomba Inicial", data: record.fotoInicial },
+        { label: "Bomba Final",   data: record.fotoFinal },
+        { label: "Horómetro",     data: record.fotoHorometro }
+      ]
+    : [
+        { label: "Bomba Inicial", data: record.fotoInicial },
+        { label: "Bomba Final",   data: record.fotoFinal }
+      ];
+
+  // Cada cuadro es CUADRADO. El lado es el ancho de columna, A MENOS que
+  // eso no quepa en la altura disponible (p. ej. con 3 bloques apilados);
+  // en ese caso se reduce el lado para que los cuadros + sus etiquetas y
+  // separaciones siempre entren en la página, sin desbordarse.
+  const espacioLabel = 0.22;  // alto reservado para el texto encima de cada cuadro
+  const gapVerticalMin = 0.15;
+  const nBloques = bloquesIzq.length;
+
+  const ladoPorAncho = colIzqW;
+  const ladoPorAltura =
+    (alturaDisponible - espacioLabel * nBloques - gapVerticalMin * (nBloques - 1))
+    / nBloques;
+  const ladoCuadro = Math.min(ladoPorAncho, ladoPorAltura);
+
+  // Alto real de cada "bloque" (etiqueta + cuadro). El espacio que sobre
+  // después de los bloques se reparte como separación extra entre ellos.
+  const altoBloque = espacioLabel + ladoCuadro;
+  const espacioRestante = alturaDisponible - altoBloque * nBloques;
+  const gapVertical = nBloques > 1
+    ? Math.max(gapVerticalMin, espacioRestante / (nBloques - 1))
+    : 0;
+
+  let yCursorIzq = yInicio;
+  bloquesIzq.forEach(b => {
+    dibujarFotoEnCaja(b.data, xIzq, yCursorIzq + espacioLabel, ladoCuadro, ladoCuadro, b.label,
+      sinHorometro && b.label === "Horómetro" ? "Sin horómetro" : "Foto no disponible");
+    yCursorIzq += altoBloque + gapVertical;
   });
 
-  let yDespuesFotos = maxBottomY + 0.4;
-
-  // --- FOTO HORÓMETRO (fila completa, debajo de las fotos de bomba) ---
-  if (tieneHoroFoto) {
-    doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
-    doc.text("Horómetro", margin, yDespuesFotos - 0.06);
-
-    let horoProps;
-    try { horoProps = doc.getImageProperties(record.fotoHorometro); } catch(e) { horoProps = null; }
-
-    if (horoProps) {
-      const maxHHoro = 2.8;
-      let hw = contentW * 0.55, hh = (horoProps.height * hw) / horoProps.width;
-      if (hh > maxHHoro) { hh = maxHHoro; hw = (horoProps.width * hh) / horoProps.height; }
-      const hx = margin + (contentW - hw) / 2;
-      doc.addImage(record.fotoHorometro, "JPEG", hx, yDespuesFotos, hw, hh);
-      yDespuesFotos = yDespuesFotos + hh + 0.4;
-    } else {
-      dibujarPlaceholder(margin, yDespuesFotos, contentW, 1.2, "Foto de horómetro inválida");
-      yDespuesFotos = yDespuesFotos + 1.2 + 0.4;
-    }
-  }
-
-  const yTicket = yDespuesFotos;
-  doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
-  doc.text("Ticket de Carga", margin, yTicket - 0.06);
-
-  if (record.fotoTicket) {
-    let props;
-    try { props = doc.getImageProperties(record.fotoTicket); }
-    catch (err) { props = null; }
-
-    if (props) {
-      const maxHTicket = pageH - margin - yTicket;
-      let w = contentW, h = (props.height * w) / props.width;
-      if (h > maxHTicket) { h = maxHTicket; w = (props.width * h) / props.height; }
-      const xTicket = margin + (contentW - w) / 2;
-      doc.addImage(record.fotoTicket, "JPEG", xTicket, yTicket, w, h);
-    } else {
-      dibujarPlaceholder(margin, yTicket, contentW, 1.5, "Foto de ticket inválida o corrupta");
-    }
-  } else {
-    const texto = record.status === "pendiente" ? "Ticket aún pendiente de adjuntar" : "Foto de ticket no disponible";
-    dibujarPlaceholder(margin, yTicket, contentW, 1.5, texto);
-  }
+  // Columna derecha: el Ticket en un solo rectángulo vertical que ocupa
+  // toda la altura disponible (igual que en el boceto), con su propia
+  // etiqueta arriba para alinearse visualmente con la columna izquierda.
+  dibujarFotoEnCaja(
+    record.fotoTicket,
+    xDer, yInicio + espacioLabel,
+    colDerW, alturaDisponible - espacioLabel,
+    "Ticket de Carga",
+    record.status === "pendiente" ? "Ticket aún pendiente de adjuntar" : "Foto de ticket no disponible"
+  );
 
   return doc;
 }
