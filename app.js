@@ -337,13 +337,69 @@ function showScreen(name) {
     s.classList.toggle("hidden", s.id !== `screen-${name}`);
   });
 }
-function switchTab(name) {
+function switchTab(name, desdePopstate = false) {
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.id === `tab-${name}`));
   document.querySelectorAll(".tab-content").forEach(c => c.classList.toggle("active", c.id === `content-${name}`));
   if (name === "historial") loadHistory();
   if (name === "pendientes" && isAdmin) loadPendientes();
   if (name === "usuarios" && isMaster) loadUsuarios();
+  // Solo empujamos historial si NO venimos de Registro→Registro (evita
+  // entradas duplicadas) y si el cambio fue un click real, no un popstate.
+  if (!desdePopstate && name !== "registro") navPush(`tab-${name}`);
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   NAVEGACIÓN "ATRÁS" DEL SISTEMA (gesto / botón físico del celular)
+   ─────────────────────────────────────────────────────────────────
+   Por defecto, una PWA de una sola página no tiene "páginas" que el
+   navegador pueda recorrer: el botón/gesto "atrás" del teléfono no
+   encuentra historial y termina cerrando la app completa.
+
+   Para evitarlo, cada vez que el usuario entra a un "nivel" navegable
+   (un paso del formulario, un modal abierto) empujamos una entrada al
+   historial del navegador con history.pushState(). Así, el botón
+   "atrás" del sistema dispara un evento popstate que interceptamos
+   aquí para cerrar/retroceder SOLO ese nivel, sin salir de la app.
+   Si no hay ningún nivel especial abierto, dejamos que el navegador
+   haga lo que corresponda (normalmente, salir de la app/pestaña).
+───────────────────────────────────────────────────────────────── */
+function navPush(nivel) {
+  history.pushState({ fuelControlNivel: nivel }, "");
+}
+
+window.addEventListener("popstate", (e) => {
+  // ¿Hay un modal abierto? Ciérralo y no hagas nada más.
+  const modalesAbiertos = ["modal-pendiente", "modal-editar", "modal-usuario"]
+    .filter(id => !document.getElementById(id)?.classList.contains("hidden"));
+
+  if (modalesAbiertos.length > 0) {
+    modalesAbiertos.forEach(id => {
+      if (id === "modal-pendiente") cerrarModalPendiente(true);
+      if (id === "modal-editar") cerrarModalEditar(true);
+      if (id === "modal-usuario") cerrarModalUsuario(true);
+    });
+    return;
+  }
+
+  // ¿Estamos en el formulario de Registro y no es el paso 1? Retrocede un paso.
+  const enRegistro = document.getElementById("content-registro")?.classList.contains("active");
+  if (enRegistro && currentStep > 1) {
+    goStep(currentStep - 1, /*desdePopstate*/ true);
+    return;
+  }
+
+  // ¿Estamos en otra pestaña que no sea Registro? Vuelve a Registro.
+  const tabActiva = document.querySelector(".tab-btn.active")?.id;
+  if (tabActiva && tabActiva !== "tab-registro") {
+    switchTab("registro", true);
+    return;
+  }
+
+  // En cualquier otro caso (ya estamos en Registro paso 1, o en login),
+  // no interceptamos: dejamos que el sistema haga lo que corresponda
+  // (normalmente, minimizar/cerrar la app), que es el comportamiento
+  // esperado cuando ya no queda "a dónde regresar" dentro de la app.
+});
 
 /* --- LOGICA DE FORMULARIO --- */
 function setHorometroMode(sinHoro) {
@@ -495,8 +551,12 @@ function aceptarSurtidor(tipo) {
 }
 
 /* --- NAVEGACION Y VALIDACION --- */
-function goStep(n) {
+function goStep(n, desdePopstate = false) {
   if (n > currentStep && !validateStep(currentStep)) return;
+  // Si el cambio de paso vino de un avance normal (no del botón "atrás"
+  // del sistema), empujamos una entrada al historial para que luego el
+  // gesto/botón "atrás" pueda deshacer este avance.
+  if (!desdePopstate) navPush(`paso-${n}`);
   currentStep = n;
   for (let i=1; i<=4; i++) {
     document.getElementById(`panel-step-${i}`)?.classList.toggle("active", i === n);
@@ -586,17 +646,25 @@ function buildSummary() {
 /* --- CALCULO RENDIMIENTO L/H --- */
 // FIX: Se agrega excludeDocId para que al editar un registro viejo no se compare
 // consigo mismo (traía el registro MÁS RECIENTE aunque fuera el propio).
+//
+// FIX IMPORTANTE: antes esta consulta combinaba where("eco","==",...) con
+// orderBy("horometroRaw","desc"), lo cual EXIGE un índice compuesto en
+// Firestore. Si ese índice no existía (o aún no terminaba de construirse),
+// Firestore lanzaba un error que el catch() de abajo convertía en "N/A"
+// SIN avisar nada — el rendimiento se veía simplemente como si no hubiera
+// registro anterior, aunque sí existiera. Para no depender de ese índice,
+// ahora solo filtramos por "eco" en Firestore y ordenamos por horómetro
+// en el cliente (son máximos 30 documentos, así que es barato).
 async function getRendimiento(ecoActual, horoRawActual, litrosActuales, excludeDocId = null) {
   // Sin horómetro actual no se puede calcular diferencia de horas
   if (!horoRawActual) return "N/A";
   try {
     const col = window.fbCollection(window.firebaseDB, "registros");
     const q = window.fbQuery(
-  col,
-  window.fbWhere("eco", "==", ecoActual),
-  window.fbOrderBy("horometroRaw", "desc"),
-  window.fbLimit(10)
-);
+      col,
+      window.fbWhere("eco", "==", ecoActual),
+      window.fbLimit(30)
+    );
     const snap = await window.fbGetDocs(q);
     if (snap.empty) return "Primer Registro";
 
@@ -608,9 +676,15 @@ async function getRendimiento(ecoActual, horoRawActual, litrosActuales, excludeD
 
     const horoActualDec = horoADecimal(horoRawActual);
 
+    // Ordenamos los registros del mismo ECO por horómetro descendente
+    // (el más alto = el más reciente), igual que antes hacía Firestore.
+    const docsOrdenados = snap.docs
+      .filter(d => d.data().horometroRaw)
+      .sort((a, b) => b.data().horometroRaw - a.data().horometroRaw);
+
     // Buscamos el registro anterior más reciente del mismo ECO
     // que tenga horómetro válido y sea distinto al que estamos editando
-    for (const docSnap of snap.docs) {
+    for (const docSnap of docsOrdenados) {
       if (excludeDocId && docSnap.id === excludeDocId) continue;
 
       const prev = docSnap.data();
@@ -632,6 +706,10 @@ async function getRendimiento(ecoActual, horoRawActual, litrosActuales, excludeD
 
     return "Primer Registro";
   } catch (e) {
+    // FIX: antes este error se tragaba en silencio devolviendo "N/A".
+    // Ahora lo dejamos en consola para poder diagnosticar (p. ej. reglas
+    // de Firestore, índice faltante, etc.) en vez de un "N/A" sin pistas.
+    console.error("getRendimiento error:", e);
     return "N/A";
   }
 }
@@ -845,10 +923,12 @@ function abrirPendiente(id) {
   document.getElementById("preview-box-pend").classList.add("hidden");
   document.getElementById("btn-save-pend").style.display = "none";
   document.getElementById("modal-pendiente").classList.remove("hidden");
+  navPush("modal-pendiente");
 }
 
-function cerrarModalPendiente() {
+function cerrarModalPendiente(desdePopstate = false) {
   document.getElementById("modal-pendiente").classList.add("hidden");
+  if (!desdePopstate) history.back();
 }
 
 function refrescarListaActual() {
@@ -910,10 +990,12 @@ function abrirEditar(id) {
   document.getElementById("edit-horometro").value = d.horometroRaw ?? "";
   document.getElementById("edit-ticket").value = (d.ticket === "PENDIENTE" ? "" : d.ticket) || "";
   document.getElementById("modal-editar").classList.remove("hidden");
+  navPush("modal-editar");
 }
 
-function cerrarModalEditar() {
+function cerrarModalEditar(desdePopstate = false) {
   document.getElementById("modal-editar").classList.add("hidden");
+  if (!desdePopstate) history.back();
 }
 
 async function guardarEdicion() {
@@ -1081,10 +1163,12 @@ function abrirUsuario(docId) {
   document.getElementById("usuario-activo").checked = u ? (u.activo !== false) : true;
 
   document.getElementById("modal-usuario").classList.remove("hidden");
+  navPush("modal-usuario");
 }
 
-function cerrarModalUsuario() {
+function cerrarModalUsuario(desdePopstate = false) {
   document.getElementById("modal-usuario").classList.add("hidden");
+  if (!desdePopstate) history.back();
 }
 
 async function guardarUsuario() {
