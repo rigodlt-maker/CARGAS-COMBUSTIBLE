@@ -33,9 +33,9 @@ export const RESIDENTE_SUBE_PROVEEDOR = false;
 // Pestañas visibles por rol. 'cargas' (antes "Registro") y 'maquinaria'
 // son comunes a todos los roles activos excepto donde se indica.
 export const TABS_POR_ROL = {
-  [ROLES.MASTER]:      ['cargas', 'pendientes', 'historial', 'usuarios', 'proveedor', 'maquinaria', 'graficos', 'resumen'],
-  [ROLES.ADMIN]:       ['cargas', 'pendientes', 'historial', 'usuarios', 'proveedor', 'maquinaria', 'graficos', 'resumen'],
-  [ROLES.COORDINADOR]: ['cargas', 'pendientes', 'historial', 'usuarios', 'proveedor', 'maquinaria'],
+  [ROLES.MASTER]:      ['cargas', 'pendientes', 'historial', 'usuarios', 'proveedor', 'maquinaria', 'permisos', 'graficos', 'resumen'],
+  [ROLES.ADMIN]:       ['cargas', 'pendientes', 'historial', 'usuarios', 'proveedor', 'maquinaria', 'permisos', 'graficos', 'resumen'],
+  [ROLES.COORDINADOR]: ['cargas', 'pendientes', 'historial', 'usuarios', 'proveedor', 'maquinaria', 'permisos'],
   [ROLES.RESIDENTE]:   ['cargas', 'pendientes', 'maquinaria', ...(RESIDENTE_VE_PROVEEDOR ? ['proveedor'] : [])],
   [ROLES.VISOR]:       ['graficos', 'maquinaria', 'resumen'],
 };
@@ -171,6 +171,13 @@ export function puedeEliminarMaquinaria(rol) {
 // solo Admin y Coordinador (instrucción explícita; Master incluido por jerarquía).
 export function puedeSubirDocumentosMaquinaria(rol) {
   return [ROLES.ADMIN, ROLES.COORDINADOR, ROLES.MASTER].includes(rol);
+}
+
+// Pestaña "Permisos" (punto 7.2): mismos roles que pueden subir/editar
+// documentos de maquinaria. Visor y Residente no la ven (no estaba
+// contemplada para ellos en los requerimientos originales).
+export function puedeVerPermisos(rol) {
+  return puedeSubirDocumentosMaquinaria(rol);
 }
 
 /* ───────────────────────────── RESUMEN / DASHBOARD / GRÁFICOS ───────────────────────────── */
