@@ -162,6 +162,11 @@ export function puedeEditarMaquinaria(rol) {
   return [ROLES.COORDINADOR, ROLES.ADMIN, ROLES.MASTER].includes(rol);
 }
 
+// Eliminar maquinaria del catálogo: solo Master (igual que en firestore.rules.txt).
+export function puedeEliminarMaquinaria(rol) {
+  return rol === ROLES.MASTER;
+}
+
 // Documentos legales (Permiso, Factura, DC3, Tarjeta de circulación, Póliza):
 // solo Admin y Coordinador (instrucción explícita; Master incluido por jerarquía).
 export function puedeSubirDocumentosMaquinaria(rol) {
