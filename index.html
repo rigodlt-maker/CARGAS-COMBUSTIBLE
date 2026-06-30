@@ -117,8 +117,12 @@
 
         <!-- FOTO HORÓMETRO -->
         <div id="horo-foto-section" style="margin-top:12px;">
-          <button class="btn btn-outline btn-sm" id="btn-cam-horo" onclick="document.getElementById('file-horo').click()" style="width:100%;">📷 Tomar Foto del Horómetro</button>
+          <div id="btn-cam-horo" style="display:flex; gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('file-horo').click()" style="flex:1;">📷 Tomar Foto</button>
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('file-horo-gal').click()" style="flex:1;">🖼️ Subir de galería</button>
+          </div>
           <input type="file" id="file-horo" accept="image/*" capture="environment" style="display:none" onchange="previewSurtidor(event, 'horo')" />
+          <input type="file" id="file-horo-gal" accept="image/*" style="display:none" onchange="previewSurtidor(event, 'horo')" />
           <div id="preview-box-horo" class="hidden" style="margin-top:10px; text-align:center;">
             <img id="img-horo" style="max-width:100%; border-radius:8px;" />
             <div style="display:flex; gap:10px; margin-top:10px;">
@@ -157,8 +161,12 @@
         <div class="field-group" style="background:var(--bg-elevated); padding:15px; border-radius:10px;">
           <label class="field-label">Cuenta litros INICIAL</label>
           <input type="number" id="f-cuenta-inicial" class="field-input" placeholder="0.00" />
-          <button class="btn btn-outline btn-sm" id="btn-cam-ini" style="margin-top:10px; width:100%;" onclick="document.getElementById('file-ini').click()">📷 Tomar Foto Inicial</button>
+          <div id="btn-cam-ini" style="margin-top:10px; display:flex; gap:8px;">
+            <button class="btn btn-outline btn-sm" style="flex:1;" onclick="document.getElementById('file-ini').click()">📷 Tomar Foto</button>
+            <button class="btn btn-outline btn-sm" style="flex:1;" onclick="document.getElementById('file-ini-gal').click()">🖼️ Subir de galería</button>
+          </div>
           <input type="file" id="file-ini" accept="image/*" capture="environment" style="display:none" onchange="previewSurtidor(event, 'ini')" />
+          <input type="file" id="file-ini-gal" accept="image/*" style="display:none" onchange="previewSurtidor(event, 'ini')" />
           <div id="preview-box-ini" class="hidden" style="margin-top:15px; text-align:center;">
             <img id="img-ini" style="max-width:100%; border-radius:8px;" />
             <div style="display:flex; gap:10px; margin-top:10px;">
@@ -176,8 +184,12 @@
         <div class="field-group" style="background:var(--bg-elevated); padding:15px; border-radius:10px; margin-top:15px;">
           <label class="field-label">Cuenta litros FINAL</label>
           <input type="number" id="f-cuenta-final" class="field-input" placeholder="0.00" />
-          <button class="btn btn-outline btn-sm" id="btn-cam-fin" style="margin-top:10px; width:100%;" onclick="document.getElementById('file-fin').click()">📷 Tomar Foto Final</button>
+          <div id="btn-cam-fin" style="margin-top:10px; display:flex; gap:8px;">
+            <button class="btn btn-outline btn-sm" style="flex:1;" onclick="document.getElementById('file-fin').click()">📷 Tomar Foto</button>
+            <button class="btn btn-outline btn-sm" style="flex:1;" onclick="document.getElementById('file-fin-gal').click()">🖼️ Subir de galería</button>
+          </div>
           <input type="file" id="file-fin" accept="image/*" capture="environment" style="display:none" onchange="previewSurtidor(event, 'fin')" />
+          <input type="file" id="file-fin-gal" accept="image/*" style="display:none" onchange="previewSurtidor(event, 'fin')" />
           <div id="preview-box-fin" class="hidden" style="margin-top:15px; text-align:center;">
             <img id="img-fin" style="max-width:100%; border-radius:8px;" />
             <div style="display:flex; gap:10px; margin-top:10px;">
@@ -214,8 +226,12 @@
           </div>
           <div class="field-group">
             <label class="field-label">Foto del ticket</label>
-            <button class="btn btn-outline" id="btn-cam-ticket" onclick="document.getElementById('file-ticket').click()" style="width:100%;">📷 Tomar Foto Ticket</button>
+            <div id="btn-cam-ticket" style="display:flex; gap:8px;">
+              <button class="btn btn-outline" style="flex:1;" onclick="document.getElementById('file-ticket').click()">📷 Tomar Foto</button>
+              <button class="btn btn-outline" style="flex:1;" onclick="document.getElementById('file-ticket-gal').click()">🖼️ Subir de galería</button>
+            </div>
             <input type="file" id="file-ticket" accept="image/*" capture="environment" style="display:none" onchange="previewSurtidor(event, 'ticket')" />
+            <input type="file" id="file-ticket-gal" accept="image/*" style="display:none" onchange="previewSurtidor(event, 'ticket')" />
             <div id="preview-box-ticket" class="hidden" style="margin-top:15px; text-align:center;">
               <img id="img-ticket" style="max-width:100%; border-radius:8px;" />
               <div style="display:flex; gap:10px; margin-top:10px;">
@@ -304,76 +320,11 @@
       <label class="field-label"># Ticket Definitivo</label>
       <input type="text" id="pend-ticket-input" class="field-input" placeholder="Ingresa el folio" />
     </div>
-    <button class="btn btn-outline" id="btn-cam-pend" onclick="document.getElementById('file-pend').click()" style="width:100%;">📷 Capturar Ticket</button>
+    <div id="btn-cam-pend" style="display:flex; gap:8px;">
+      <button class="btn btn-outline" style="flex:1;" onclick="document.getElementById('file-pend').click()">📷 Tomar Foto</button>
+      <button class="btn btn-outline" style="flex:1;" onclick="document.getElementById('file-pend-gal').click()">🖼️ Subir de galería</button>
+    </div>
     <input type="file" id="file-pend" accept="image/*" capture="environment" style="display:none" onchange="previewSurtidor(event, 'pend')" />
+    <input type="file" id="file-pend-gal" accept="image/*" style="display:none" onchange="previewSurtidor(event, 'pend')" />
     <div id="preview-box-pend" class="hidden" style="margin-top:15px; text-align:center;">
-      <img id="img-pend" style="max-width:100%; border-radius:8px;" />
-      <div style="display:flex; gap:10px; margin-top:10px;">
-        <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="document.getElementById('file-pend').click()">Repetir</button>
-        <button class="btn btn-success btn-sm" style="flex:1;" onclick="aceptarSurtidor('pend')">Aceptar ✔</button>
-      </div>
-    </div>
-    <div id="ok-pend" class="alert alert-success hidden" style="margin-top:10px;">✅ Ticket Confirmado</div>
-    <button class="btn btn-primary" id="btn-save-pend" onclick="guardarPendiente()" style="width:100%; margin-top:20px; display:none;">Cerrar Registro y Generar PDF</button>
-    <button class="btn btn-ghost" onclick="cerrarModalPendiente()" style="width:100%; margin-top:10px;">Cancelar</button>
-  </div>
-</div>
-
-<!-- ═══ MODAL: Editar registro ═══ -->
-<div id="modal-editar" class="modal-overlay hidden" onclick="if(event.target===this) cerrarModalEditar()">
-  <div class="modal-card">
-    <h3 style="color:var(--orange); margin-bottom:10px;">✏️ Editar Registro</h3>
-    <input type="hidden" id="edit-id" />
-    <div class="field-group"><label class="field-label">Fecha</label><input type="date" id="edit-fecha" class="field-input" /></div>
-    <div class="field-group">
-      <label class="field-label"># Económico (ECO)</label>
-      <select id="edit-eco" class="field-input" onchange="autoCompletarEquipoEdit()"></select>
-    </div>
-    <div class="field-group"><label class="field-label">Maquinaria</label><input type="text" id="edit-maquinaria" class="field-input" readonly /></div>
-    <div class="field-group"><label class="field-label">Litros cargados</label><input type="number" id="edit-litros" class="field-input" /></div>
-    <div class="field-group">
-      <label class="field-label">Horómetro <span class="field-hint">(formato corrido, ej. 10002)</span></label>
-      <input type="number" id="edit-horometro" class="field-input" />
-    </div>
-    <div class="field-group"><label class="field-label"># Ticket</label><input type="text" id="edit-ticket" class="field-input" /></div>
-    <div id="edit-error" class="alert alert-error hidden"></div>
-    <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="guardarEdicion()">Guardar Cambios</button>
-    <button class="btn btn-ghost" style="width:100%; margin-top:10px;" onclick="cerrarModalEditar()">Cancelar</button>
-  </div>
-</div>
-
-<!-- ═══ MODAL: Gestión de usuarios ═══ -->
-<div id="modal-usuario" class="modal-overlay hidden" onclick="if(event.target===this) cerrarModalUsuario()">
-  <div class="modal-card">
-    <h3 id="usuario-modal-title" style="color:var(--blue); margin-bottom:10px;">Nuevo usuario</h3>
-    <input type="hidden" id="usuario-doc-id" />
-    
-    <!-- CAMBIO: Se cambió el label a "Usuario (Alias)" y el id/type/placeholder -->
-    <div class="field-group">
-      <label class="field-label">Usuario (Alias)</label>
-      <input type="text" id="usuario-email" class="field-input" placeholder="Ej. juan.perez" />
-    </div>
-    
-    <div class="field-group"><label class="field-label">Nombre</label><input type="text" id="usuario-nombre" class="field-input" placeholder="Nombre completo" /></div>
-    <div class="field-group">
-      <label class="field-label">Rol</label>
-      <select id="usuario-rol" class="field-input">
-        <option value="capturista">👷 Capturista (Operador)</option>
-        <option value="admin">🛡️ Administrador General</option>
-        <option value="master">🔑 Administrador Maestro</option>
-      </select>
-    </div>
-    <label class="toggle-label" style="margin:10px 0; display:block;"><input type="checkbox" id="usuario-activo" checked /> Usuario activo</label>
-    <div id="usuario-error" class="alert alert-error hidden"></div>
-    <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="guardarUsuario()">Guardar</button>
-    <button class="btn btn-ghost" style="width:100%; margin-top:10px;" onclick="cerrarModalUsuario()">Cancelar</button>
-  </div>
-</div>
-
-<div id="loading-overlay" class="loading-overlay hidden">
-  <div class="loading-card"><div class="spinner"></div><p id="loading-text">Procesando...</p></div>
-</div>
-
-<script type="module" src="app.js"></script>
-</body>
-</html>
+      <img id="img-pend" style="max-width:100%;
