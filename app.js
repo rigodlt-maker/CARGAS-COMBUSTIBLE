@@ -393,6 +393,8 @@ function switchTab(name, desdePopstate = false) {
   if (name === "usuarios" && Roles.puedeVerPanelUsuarios(currentRol)) loadUsuarios();
   if (name === "proveedor" && Roles.puedeVerProveedor(currentRol)) loadProveedor();
   if (name === "maquinaria" && Roles.puedeVerMaquinaria(currentRol)) loadMaquinaria();
+  if (name === "resumen" && Roles.puedeVerResumen(currentRol)) loadResumen();
+  if (name === "graficos" && Roles.puedeVerDashboardKPIs(currentRol)) loadDashboard();
   // Solo empujamos historial si NO venimos de Cargas→Cargas (evita
   // entradas duplicadas) y si el cambio fue un click real, no un popstate.
   if (!desdePopstate && name !== "cargas") navPush(`tab-${name}`);
@@ -2058,6 +2060,257 @@ async function eliminarMaquinaria() {
   }
 }
 
+/* ───────────────────────────── RESUMEN (punto 6) y DASHBOARD (punto 8) ───────────────────────────── */
+
+// Trae la maquinaria UNA vez y arma:
+//  - mapPorInterno: igual clave que usa "registros.eco" (numInterno || eco || docId)
+//  - lista: arreglo completo de máquinas con su id
+async function obtenerMaquinariaParaReportes() {
+  const col = window.fbCollection(window.firebaseDB, "maquinaria");
+  const snap = await window.fbGetDocs(col);
+  const mapPorInterno = {};
+  const lista = [];
+  snap.forEach(docSnap => {
+    const d = { id: docSnap.id, ...docSnap.data() };
+    lista.push(d);
+    const clave = d.numInterno || d.eco || d.id;
+    mapPorInterno[clave] = d;
+  });
+  return { mapPorInterno, lista };
+}
+
+// Dibuja un set de barras horizontales simples (sin librerías externas) en
+// el contenedor indicado. data = [{ label, value }], ordenado de mayor a menor.
+function renderBarras(containerId, data, opts = {}) {
+  const cont = document.getElementById(containerId);
+  if (!data.length) { cont.innerHTML = `<p style="color:var(--text-muted); font-size:13px;">Sin datos para mostrar.</p>`; return; }
+  const max = Math.max(...data.map(d => d.value), 1);
+  const sufijo = opts.sufijo || "";
+  cont.innerHTML = data
+    .sort((a, b) => b.value - a.value)
+    .map(d => {
+      const pct = Math.max((d.value / max) * 100, 3);
+      return `
+        <div class="bar-row">
+          <div class="bar-label" title="${d.label}">${d.label}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%;"><span class="bar-fill-value">${d.value}${sufijo}</span></div></div>
+        </div>`;
+    }).join("");
+}
+
+function clasificarConsumo(valor, bajo, medio, alto) {
+  if (valor == null || isNaN(valor)) return null;
+  if (bajo == null || alto == null) return null;
+  if (valor <= bajo) return "Bajo";
+  if (valor <= alto) return "Medio";
+  return "Alto";
+}
+
+/* ── RESUMEN ── */
+async function loadResumen() {
+  const desdeInput = document.getElementById("res-fecha-desde");
+  const hastaInput = document.getElementById("res-fecha-hasta");
+  if (!hastaInput.value) hastaInput.value = new Date().toISOString().split("T")[0];
+  if (!desdeInput.value) {
+    const d = new Date(); d.setDate(d.getDate() - 30);
+    desdeInput.value = d.toISOString().split("T")[0];
+  }
+  const desde = desdeInput.value, hasta = hastaInput.value;
+  const zonaFiltro = document.getElementById("res-f-zona").value;
+
+  document.getElementById("res-rendimientos-chart").innerHTML = "Cargando...";
+  document.getElementById("res-equipos-list").innerHTML = "Cargando...";
+
+  try {
+    const { mapPorInterno, lista } = await obtenerMaquinariaParaReportes();
+
+    // Refrescar opciones del select de zona sin perder lo seleccionado
+    const zonas = [...new Set(lista.map(m => m.zona).filter(Boolean))].sort();
+    const selZona = document.getElementById("res-f-zona");
+    selZona.innerHTML = `<option value="">Todas las zonas</option>` + zonas.map(z => `<option value="${z}">${z}</option>`).join("");
+    selZona.value = zonaFiltro;
+
+    // --- Sección RENDIMIENTOS ---
+    const colReg = window.fbCollection(window.firebaseDB, "registros");
+    const qReg = window.fbQuery(colReg, window.fbWhere("fecha", ">=", desde), window.fbWhere("fecha", "<=", hasta));
+    const snapReg = await window.fbGetDocs(qReg);
+
+    const grupos = {}; // etiqueta -> { suma, n }
+    snapReg.forEach(docSnap => {
+      const r = docSnap.data();
+      const valor = parseFloat(r.rendimiento);
+      if (isNaN(valor)) return; // ignora "N/A" / "Primer Registro"
+      const maquina = mapPorInterno[r.eco];
+      if (!maquina) return;
+      if (zonaFiltro && maquina.zona !== zonaFiltro) return;
+
+      const etiqueta = zonaFiltro
+        ? `${maquina.tipo || "—"} ${maquina.marca || ""}`.trim()
+        : (maquina.zona || "Sin zona");
+
+      if (!grupos[etiqueta]) grupos[etiqueta] = { suma: 0, n: 0 };
+      grupos[etiqueta].suma += valor;
+      grupos[etiqueta].n += 1;
+    });
+
+    const dataRendimientos = Object.entries(grupos).map(([label, g]) => ({ label, value: Math.round((g.suma / g.n) * 100) / 100 }));
+    document.getElementById("res-rendimientos-sub").textContent = zonaFiltro
+      ? `Consumo promedio por tipo+marca en "${zonaFiltro}" (${desde} a ${hasta})`
+      : `Consumo promedio (lt/hr) por zona (${desde} a ${hasta})`;
+    renderBarras("res-rendimientos-chart", dataRendimientos, { sufijo: " lt/hr" });
+
+    // --- Sección EQUIPOS ---
+    const activos = lista.filter(m => m.activa !== false);
+    const porTipo = {};
+    activos.forEach(m => {
+      const tipo = m.tipo || "Sin tipo";
+      if (!porTipo[tipo]) porTipo[tipo] = { propia: 0, rentada: 0 };
+      if ((m.propiedad || "Propia") === "Rentada") porTipo[tipo].rentada++;
+      else porTipo[tipo].propia++;
+    });
+    const equiposHtml = Object.entries(porTipo)
+      .sort((a, b) => (b[1].propia + b[1].rentada) - (a[1].propia + a[1].rentada))
+      .map(([tipo, c]) => `
+        <div class="history-card" style="cursor:default;">
+          <div class="hc-header"><span>${tipo}</span><span>${c.propia + c.rentada}</span></div>
+          <p style="color:var(--text-muted); font-size:12px; margin-top:4px;">Propias: ${c.propia} · Rentadas: ${c.rentada}</p>
+        </div>`).join("");
+    document.getElementById("res-equipos-list").innerHTML = equiposHtml || `<p style="color:var(--text-muted); font-size:13px;">Sin maquinaria activa.</p>`;
+
+    // Cache para el PDF
+    window._resumenCache = { desde, hasta, zonaFiltro, dataRendimientos, porTipo };
+  } catch (e) {
+    document.getElementById("res-rendimientos-chart").innerHTML = `<p style="color:var(--red);">❌ Error: ${e.message}</p>`;
+    console.error("loadResumen error:", e);
+  }
+}
+
+async function descargarResumenPDF() {
+  const data = window._resumenCache;
+  if (!data) { alert("Espera a que cargue el Resumen antes de descargarlo."); return; }
+  if (!window.jspdf) {
+    await new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+      s.onload = res; s.onerror = () => rej(new Error("No se pudo cargar jsPDF."));
+      document.head.appendChild(s);
+    });
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
+  let y = 0.6;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+  doc.text("Resumen ejecutivo — Control de Combustible", 0.5, y); y += 0.3;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+  doc.text(`Periodo: ${data.desde} a ${data.hasta}${data.zonaFiltro ? " · Zona: " + data.zonaFiltro : ""}`, 0.5, y); y += 0.35;
+
+  doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text("Rendimientos", 0.5, y); y += 0.22;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+  data.dataRendimientos.forEach(d => { doc.text(`${d.label}: ${d.value} lt/hr`, 0.6, y); y += 0.2; });
+  y += 0.2;
+
+  doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text("Equipos activos", 0.5, y); y += 0.22;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+  Object.entries(data.porTipo).forEach(([tipo, c]) => {
+    doc.text(`${tipo}: ${c.propia + c.rentada} (Propias: ${c.propia}, Rentadas: ${c.rentada})`, 0.6, y); y += 0.2;
+  });
+
+  doc.save(`Resumen_${data.desde}_a_${data.hasta}.pdf`);
+}
+
+/* ── DASHBOARD ── */
+async function loadDashboard() {
+  document.getElementById("dash-kpis").innerHTML = "Cargando...";
+  try {
+    const { lista } = await obtenerMaquinariaParaReportes();
+
+    // Refrescar opciones de filtros sin perder lo seleccionado
+    const fEco = document.getElementById("dash-f-eco").value;
+    const fZona = document.getElementById("dash-f-zona").value;
+    const fProv = document.getElementById("dash-f-proveedor").value;
+
+    document.getElementById("dash-f-eco").innerHTML = `<option value="">Todas las máquinas</option>` +
+      lista.map(m => `<option value="${m.numInterno || m.eco || m.id}">${m.eco || m.numInterno} — ${m.tipo || ""}</option>`).join("");
+    document.getElementById("dash-f-eco").value = fEco;
+
+    const zonas = [...new Set(lista.map(m => m.zona).filter(Boolean))].sort();
+    document.getElementById("dash-f-zona").innerHTML = `<option value="">Todas las zonas</option>` + zonas.map(z => `<option value="${z}">${z}</option>`).join("");
+    document.getElementById("dash-f-zona").value = fZona;
+
+    const proveedores = [...new Set(lista.map(m => m.proveedor).filter(Boolean))].sort();
+    document.getElementById("dash-f-proveedor").innerHTML = `<option value="">Todos los proveedores</option>` + proveedores.map(p => `<option value="${p}">${p}</option>`).join("");
+    document.getElementById("dash-f-proveedor").value = fProv;
+
+    const filtradas = lista.filter(m => {
+      if (fEco && (m.numInterno || m.eco || m.id) !== fEco) return false;
+      if (fZona && m.zona !== fZona) return false;
+      if (fProv && m.proveedor !== fProv) return false;
+      return true;
+    });
+
+    // --- KPIs Bajo/Medio/Alto: usa el último rendimiento registrado de cada máquina ---
+    const conteo = { Bajo: 0, Medio: 0, Alto: 0, "Sin datos": 0 };
+    await Promise.all(filtradas.map(async m => {
+      const clave = m.numInterno || m.eco || m.id;
+      try {
+        const colReg = window.fbCollection(window.firebaseDB, "registros");
+        const qReg = window.fbQuery(colReg, window.fbWhere("eco", "==", clave), window.fbLimit(10));
+        const snap = await window.fbGetDocs(qReg);
+        let mejorValor = null, mejorFecha = null;
+        snap.forEach(docSnap => {
+          const r = docSnap.data();
+          const v = parseFloat(r.rendimiento);
+          if (isNaN(v)) return;
+          if (!mejorFecha || r.fecha > mejorFecha) { mejorFecha = r.fecha; mejorValor = v; }
+        });
+        const claseReal = mejorValor == null ? "Sin datos" : (clasificarConsumo(mejorValor, m.consumoBajo, m.consumoMedio, m.consumoAlto) || "Sin datos");
+        conteo[claseReal] = (conteo[claseReal] || 0) + 1;
+      } catch (e) { conteo["Sin datos"]++; }
+    }));
+
+    document.getElementById("dash-kpis").innerHTML = `
+      <div class="kpi-card"><div class="kpi-num">${filtradas.length}</div><div class="kpi-label">Máquinas filtradas</div></div>
+      <div class="kpi-card" style="background:var(--green-dim); border-color:var(--green);"><div class="kpi-num" style="color:var(--green);">${conteo.Bajo}</div><div class="kpi-label">Consumo bajo</div></div>
+      <div class="kpi-card"><div class="kpi-num">${conteo.Medio}</div><div class="kpi-label">Consumo medio</div></div>
+      <div class="kpi-card" style="background:var(--red-dim); border-color:var(--red);"><div class="kpi-num" style="color:var(--red);">${conteo.Alto}</div><div class="kpi-label">Consumo alto</div></div>
+    `;
+
+    // --- Gráfico por zona y por subzona ---
+    const porZona = {}, porSubzona = {};
+    filtradas.forEach(m => {
+      const z = m.zona || "Sin zona"; porZona[z] = (porZona[z] || 0) + 1;
+      const s = m.subzona || "Sin subzona"; porSubzona[s] = (porSubzona[s] || 0) + 1;
+    });
+    renderBarras("dash-chart-zona", Object.entries(porZona).map(([label, value]) => ({ label, value })));
+    renderBarras("dash-chart-subzona", Object.entries(porSubzona).map(([label, value]) => ({ label, value })));
+
+    // --- Tabla tipo / cantidad / marcas / consumo promedio ---
+    const porTipo = {};
+    filtradas.forEach(m => {
+      const tipo = m.tipo || "Sin tipo";
+      if (!porTipo[tipo]) porTipo[tipo] = { cantidad: 0, marcas: new Set(), sumaConsumo: 0, nConsumo: 0 };
+      porTipo[tipo].cantidad++;
+      if (m.marca) porTipo[tipo].marcas.add(m.marca);
+      if (typeof m.consumoPromedio === "number") { porTipo[tipo].sumaConsumo += m.consumoPromedio; porTipo[tipo].nConsumo++; }
+    });
+    const filas = Object.entries(porTipo).map(([tipo, t]) => `
+      <tr>
+        <td>${tipo}</td>
+        <td>${t.cantidad}</td>
+        <td>${[...t.marcas].join(", ") || "—"}</td>
+        <td>${t.nConsumo ? (t.sumaConsumo / t.nConsumo).toFixed(2) : "—"}</td>
+      </tr>`).join("");
+    document.getElementById("dash-tabla").innerHTML = `
+      <table class="resumen-table">
+        <thead><tr><th>Tipo</th><th>Cantidad</th><th>Marcas</th><th>Consumo prom. lt/hr</th></tr></thead>
+        <tbody>${filas || `<tr><td colspan="4">Sin datos</td></tr>`}</tbody>
+      </table>`;
+  } catch (e) {
+    document.getElementById("dash-kpis").innerHTML = `<p style="color:var(--red);">❌ Error: ${e.message}</p>`;
+    console.error("loadDashboard error:", e);
+  }
+}
+
 /* EXPORTACIONES PARA EL HTML */
 window.handleLogin = handleLogin;
 window.handleLogout = handleLogout;
@@ -2106,3 +2359,6 @@ window.guardarMaquinaria = guardarMaquinaria;
 window.eliminarMaquinaria = eliminarMaquinaria;
 window.toggleOtroMaquinaria = toggleOtroMaquinaria;
 window.poblarSubzonas = poblarSubzonas;
+window.loadResumen = loadResumen;
+window.descargarResumenPDF = descargarResumenPDF;
+window.loadDashboard = loadDashboard;
