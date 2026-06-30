@@ -768,6 +768,85 @@ async function getRendimiento(ecoActual, horoRawActual, litrosActuales, excludeD
   }
 }
 
+/* --- ALERTAS ANDON (punto 9) ---
+   Dos validaciones independientes, ninguna BLOQUEA el guardado: solo
+   advierten y, si el usuario decide continuar, la inconsistencia queda
+   impresa como leyenda en el PDF de esa carga (ver generateTicketPDF).
+
+   1) Capacidad del tanque: la carga no puede ser mayor que capacidadTanque
+      del catálogo de esa máquina.
+   2) Remanente estimado por horómetro: a partir del registro anterior del
+      mismo # ECO, calculamos cuántas horas trabajó la máquina desde esa
+      carga (horómetro actual − horómetro anterior) y, usando su consumo
+      promedio (lt/hr) del catálogo, estimamos cuánto combustible debió
+      haber consumido. Si la carga actual es mayor a lo que cabría según
+      ese remanente estimado, se marca como sospechosa. */
+async function obtenerHorasTrabajadasPrevias(eco, horoRawActual, excludeDocId = null) {
+  if (!horoRawActual) return null;
+  try {
+    const col = window.fbCollection(window.firebaseDB, "registros");
+    const q = window.fbQuery(col, window.fbWhere("eco", "==", eco), window.fbLimit(30));
+    const snap = await window.fbGetDocs(q);
+    if (snap.empty) return null;
+
+    function horoADecimal(raw) { return Math.floor(raw / 10) + (raw % 10) / 10; }
+    const horoActualDec = horoADecimal(horoRawActual);
+
+    const docsOrdenados = snap.docs
+      .filter(d => d.data().horometroRaw)
+      .sort((a, b) => b.data().horometroRaw - a.data().horometroRaw);
+
+    for (const docSnap of docsOrdenados) {
+      if (excludeDocId && docSnap.id === excludeDocId) continue;
+      const prev = docSnap.data();
+      if (!prev.horometroRaw) continue;
+      const horasTrabajadas = horoActualDec - horoADecimal(prev.horometroRaw);
+      if (horasTrabajadas <= 0) continue;
+      return horasTrabajadas;
+    }
+    return null;
+  } catch (e) {
+    console.error("obtenerHorasTrabajadasPrevias error:", e);
+    return null;
+  }
+}
+
+// Tolerancia para no disparar falsas alarmas por estimaciones (consumo
+// promedio y horómetro nunca son exactos al 100%).
+const ANDON_TOLERANCIA = 1.15; // 15% de margen
+
+async function verificarAlertasAndon(eco, litros, horoRawActual, excludeDocId = null) {
+  const alertas = [];
+  const cat = catalogoEquipos.find(e => e.interno === eco);
+  if (!cat || !litros) return alertas;
+
+  // 1) Capacidad total del tanque
+  if (cat.capacidadTanque && litros > cat.capacidadTanque) {
+    alertas.push(
+      `La carga (${litros} L) excede la capacidad total del tanque registrada para esta máquina (${cat.capacidadTanque} L).`
+    );
+  }
+
+  // 2) Remanente estimado según horómetro + consumo promedio del catálogo
+  if (cat.capacidadTanque && cat.consumoPromedio && horoRawActual) {
+    const horasTrabajadas = await obtenerHorasTrabajadasPrevias(eco, horoRawActual, excludeDocId);
+    if (horasTrabajadas !== null) {
+      const consumoEstimado = horasTrabajadas * cat.consumoPromedio;
+      const remanenteEstimado = Math.max(0, cat.capacidadTanque - consumoEstimado);
+      const espacioDisponible = cat.capacidadTanque - remanenteEstimado; // = consumoEstimado, topado a la capacidad
+      if (litros > espacioDisponible * ANDON_TOLERANCIA) {
+        alertas.push(
+          `Según el horómetro (${horasTrabajadas.toFixed(1)} h trabajadas desde la última carga × ${cat.consumoPromedio} L/h de consumo promedio), ` +
+          `a esta máquina le quedaban aprox. ${remanenteEstimado.toFixed(1)} L en el tanque. ` +
+          `La carga de ${litros} L excede lo esperado (máx. estimado ~${espacioDisponible.toFixed(1)} L).`
+        );
+      }
+    }
+  }
+
+  return alertas;
+}
+
 /* --- RESET DEL FORMULARIO (reemplaza location.reload para no cerrar sesión) --- */
 function resetFormulario() {
   // Limpiar estado de fotos
@@ -840,6 +919,25 @@ async function handleSubmit() {
     return;
   }
 
+  // --- ALERTAS ANDON (punto 9): se revisan ANTES de mostrar el overlay de
+  // "Guardando..." para que el confirm() del navegador no quede oculto
+  // detrás del loading. No bloquean el guardado, solo advierten.
+  const ecoParaAndon = document.getElementById("f-eco").value;
+  const horoRawParaAndon = document.getElementById("chk-sin-horometro").checked
+    ? null
+    : parseFloat(document.getElementById("f-horometro").value);
+  const litrosParaAndon = parseFloat(document.getElementById("f-litros").value);
+
+  const alertasAndon = await verificarAlertasAndon(ecoParaAndon, litrosParaAndon, horoRawParaAndon);
+  if (alertasAndon.length) {
+    const mensaje =
+      "⚠️ ALERTA ANDON — esta carga parece tener una inconsistencia:\n\n" +
+      alertasAndon.map(a => "• " + a).join("\n\n") +
+      "\n\n¿Estás seguro de que quieres guardar esta carga tal como está?\n" +
+      "(Se guardará de todas formas y la inconsistencia quedará impresa en el PDF.)";
+    if (!confirm(mensaje)) return;
+  }
+
   showLoading("Guardando en base de datos...");
   try {
     const eco = document.getElementById("f-eco").value;
@@ -868,6 +966,7 @@ const docRef = window.fbDoc(window.fbCollection(window.firebaseDB, "registros"))
       conciliado: false,
       creadoEn: window.fbTimestamp.now(),
       tipoCombustible: document.querySelector('input[name="tipo-combustible"]:checked')?.value || "",
+      andonAlertas: alertasAndon, // [] si no hubo inconsistencias, o lista de leyendas a imprimir
     };
 
     // 1. INTENTAR GUARDAR EN FIREBASE; si no hay internet, guardar en cola offline
@@ -1626,6 +1725,28 @@ async function generateTicketPDF(record) {
   doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
   doc.text(`Carga: ${record.litros} L   |   Rendimiento: ${record.rendimiento} L/h`, margin, 1.08);
 
+  // --- LEYENDA DE ALERTA ANDON (punto 9) ---
+  // Si esta carga disparó alguna inconsistencia (capacidad de tanque o
+  // remanente estimado por horómetro) y el usuario decidió guardarla de
+  // todas formas, lo dejamos impreso en el PDF en un recuadro rojo bien
+  // visible, justo debajo del encabezado.
+  let andonBannerH = 0;
+  if (Array.isArray(record.andonAlertas) && record.andonAlertas.length) {
+    const xBanner = margin, yBanner = headerH + 0.08, wBanner = contentW;
+    const lineas = record.andonAlertas.flatMap(txt =>
+      doc.setFont("helvetica", "bold").setFontSize(8.5).splitTextToSize("⚠ " + txt, wBanner - 0.2)
+    );
+    andonBannerH = 0.18 + lineas.length * 0.15;
+    doc.setFillColor(255, 235, 235);
+    doc.setDrawColor(200, 30, 30);
+    doc.rect(xBanner, yBanner, wBanner, andonBannerH, "FD");
+    doc.setTextColor(170, 20, 20); doc.setFontSize(8.5); doc.setFont("helvetica", "bold");
+    doc.text("ALERTA ANDON — INCONSISTENCIA DETECTADA EN ESTA CARGA:", xBanner + 0.1, yBanner + 0.15);
+    doc.setFont("helvetica", "normal");
+    doc.text(lineas, xBanner + 0.1, yBanner + 0.3);
+    andonBannerH += 0.12;
+  }
+
   // Placeholder reutilizable para cuando una foto no existe (registro viejo,
   // pendiente sin cerrar, error de carga, etc.) — así el PDF nunca truena.
   function dibujarPlaceholder(x, yPos, w, h, texto) {
@@ -1676,7 +1797,7 @@ async function generateTicketPDF(record) {
   const sinHorometro = record.horometroRaw === null || record.horometroRaw === undefined;
 
   const gap = 0.25;
-  const yInicio = headerH + 0.35;
+  const yInicio = headerH + 0.35 + andonBannerH;
   const yFinPagina = pageH - margin;
   const alturaDisponible = yFinPagina - yInicio;
 
@@ -1799,6 +1920,10 @@ async function cargarCatalogoEquiposDesdeFirestore() {
         marca: d.marca || "",
         modelo: d.modelo || "",
         interno: d.numInterno || d.eco || docSnap.id,
+        // Campos para las alertas Andon (punto 9): capacidad real del
+        // tanque y consumo promedio histórico de ESTA máquina (lt/hr).
+        capacidadTanque: typeof d.capacidadTanque === "number" ? d.capacidadTanque : null,
+        consumoPromedio: typeof d.consumoPromedio === "number" ? d.consumoPromedio : null,
       });
     });
     cargarSelectorEquipos("f-eco");
