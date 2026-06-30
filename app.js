@@ -79,6 +79,74 @@ async function subirFotosDeRegistro(record) {
   return out;
 }
 
+/* ─────────────────────────────────────────────────────────────────
+   DOCUMENTOS DE MAQUINARIA EN STORAGE (punto 7.2)
+   Ruta: maquinaria/{eco}/documentos/{tipo}.pdf — nombre fijo por tipo
+   (cada subida nueva sobreescribe la anterior, así siempre se ve/baja
+   la versión vigente). Coincide con storage.rules: solo Admin,
+   Coordinador y Master pueden escribir ahí; límite 8 MB por archivo.
+───────────────────────────────────────────────────────────────── */
+function leerArchivoComoDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("No se pudo leer el archivo."));
+    reader.readAsDataURL(file);
+  });
+}
+
+// Convierte el valor guardado de un documento (puede ser un booleano
+// viejo, undefined, o ya el objeto nuevo) a la forma estándar
+// { tiene, url, path, vencimiento, subidoEn, subidoPor }. Así el resto
+// del código no necesita preocuparse por datos antiguos.
+function normalizarDocumento(valor) {
+  if (valor && typeof valor === "object") {
+    return {
+      tiene: !!valor.tiene,
+      url: valor.url || null,
+      path: valor.path || null,
+      vencimiento: valor.vencimiento || null,
+      subidoEn: valor.subidoEn || null,
+      subidoPor: valor.subidoPor || null,
+    };
+  }
+  // Compatibilidad con datos viejos donde documentos.X era solo true/false.
+  return { tiene: !!valor, url: null, path: null, vencimiento: null, subidoEn: null, subidoPor: null };
+}
+
+// Sube un PDF de documento de maquinaria a Storage y devuelve {url, path}.
+async function subirDocumentoMaquinaria(file, eco, idSufijo) {
+  if (file.type !== "application/pdf") throw new Error("El archivo debe ser un PDF.");
+  if (file.size >= 8 * 1024 * 1024) throw new Error("El PDF no debe pesar 8 MB o más.");
+  const dataUrl = await leerArchivoComoDataURL(file);
+  const path = `maquinaria/${rutaSegura(eco)}/documentos/${idSufijo}.pdf`;
+  const sref = window.fbStorageRef(window.firebaseStorage, path);
+  await window.fbUploadString(sref, dataUrl, "data_url");
+  const url = await window.fbGetDownloadURL(sref);
+  return { url, path };
+}
+
+// Calcula el estado de vigencia de un documento ya normalizado:
+// 'faltante' | 'vencido' | 'porVencer' | 'vigente' | 'sinVencimiento'.
+function estadoDocumento(docNorm) {
+  if (!docNorm.tiene && !docNorm.url) return "faltante";
+  if (!docNorm.vencimiento) return "sinVencimiento";
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const venc = new Date(docNorm.vencimiento + "T00:00:00");
+  const diasRestantes = Math.round((venc - hoy) / 86400000);
+  if (diasRestantes < 0) return "vencido";
+  if (diasRestantes <= DIAS_AVISO_VENCIMIENTO) return "porVencer";
+  return "vigente";
+}
+
+const ESTADO_DOC_INFO = {
+  faltante:       { texto: doc => doc === "permiso" ? "Sin permiso" : "Falta",  color: "var(--text-dim)" },
+  vencido:        { texto: () => "Vencido",                                     color: "var(--red)" },
+  porVencer:      { texto: () => "Por vencer",                                  color: "var(--orange)" },
+  vigente:        { texto: () => "Vigente",                                     color: "var(--green)" },
+  sinVencimiento: { texto: () => "Cargado",                                     color: "var(--green)" },
+};
+
 // Convierte cualquier campo de foto (URL de Storage o base64 viejo) a un
 // data URL utilizable por jsPDF (doc.addImage). Si ya es base64 lo regresa
 // tal cual (registros antiguos); si es una URL, la descarga y la convierte.
@@ -318,6 +386,20 @@ const MARCAS_MAQUINARIA = [
   "Komatsu", "Caterpillar", "Hyundai", "Sany", "Linkbelt", "John Deere", "JCB", "Otro",
 ];
 
+// --- DOCUMENTOS DE MAQUINARIA (punto 7.2) ---
+// idSufijo = sufijo usado en los ids del HTML (maq-doc-{idSufijo}...), ya
+// existía "tarjeta" como sufijo histórico aunque el campo en Firestore es
+// "tarjetaCirculacion" — se respeta para no romper datos/ids existentes.
+const DOCUMENTOS_TIPOS = [
+  { campo: "permiso",            idSufijo: "permiso", label: "Permiso" },
+  { campo: "factura",            idSufijo: "factura", label: "Factura" },
+  { campo: "dc3",                idSufijo: "dc3",      label: "DC3" },
+  { campo: "tarjetaCirculacion", idSufijo: "tarjeta",  label: "Tarjeta de circulación" },
+  { campo: "poliza",             idSufijo: "poliza",   label: "Póliza" },
+];
+// Días de anticipación para marcar un documento como "por vencer" (Andon visual).
+const DIAS_AVISO_VENCIMIENTO = 30;
+
 /* --- INIT --- */
 cargarSelectorEquipos("f-eco");
 cargarSelectorEquipos("edit-eco");
@@ -395,7 +477,7 @@ function initAuth() {
       // Mostrar/ocultar TODAS las pestañas según la matriz central de roles.js,
       // en vez de ir prendiendo una por una como antes.
       const visibles = Roles.tabsVisibles(currentRol);
-      ["cargas","pendientes","historial","usuarios","proveedor","maquinaria","graficos","resumen"]
+      ["cargas","pendientes","historial","usuarios","proveedor","maquinaria","permisos","graficos","resumen"]
         .forEach(tab => {
           document.getElementById(`tab-${tab}`)?.classList.toggle("hidden", !visibles.includes(tab));
         });
@@ -466,6 +548,7 @@ function switchTab(name, desdePopstate = false) {
   if (name === "usuarios" && Roles.puedeVerPanelUsuarios(currentRol)) loadUsuarios();
   if (name === "proveedor" && Roles.puedeVerProveedor(currentRol)) loadProveedor();
   if (name === "maquinaria" && Roles.puedeVerMaquinaria(currentRol)) loadMaquinaria();
+  if (name === "permisos" && Roles.puedeVerPermisos(currentRol)) loadPermisos();
   if (name === "resumen" && Roles.puedeVerResumen(currentRol)) loadResumen();
   if (name === "graficos" && Roles.puedeVerDashboardKPIs(currentRol)) loadDashboard();
   // Solo empujamos historial si NO venimos de Cargas→Cargas (evita
@@ -2063,7 +2146,7 @@ async function loadMaquinaria() {
     const puedeEditar = Roles.puedeEditarMaquinaria(currentRol);
     list.innerHTML = "";
     items.sort((a, b) => (a.eco || "").localeCompare(b.eco || "")).forEach(d => {
-      const docsOk = d.documentos ? Object.values(d.documentos).filter(Boolean).length : 0;
+      const docsOk = DOCUMENTOS_TIPOS.filter(t => normalizarDocumento(d.documentos?.[t.campo]).tiene).length;
       const docsTotal = 5;
       list.innerHTML += `
         <div class="history-card" style="cursor:pointer;" onclick="abrirMaquinaria('${d.id}')">
@@ -2120,11 +2203,25 @@ function abrirMaquinaria(docId) {
   document.getElementById("maq-consumo-promedio").value = d?.consumoPromedio ?? "";
   document.getElementById("maq-activa").checked = d?.activa !== false;
 
-  document.getElementById("maq-doc-permiso").checked = !!d?.documentos?.permiso;
-  document.getElementById("maq-doc-factura").checked = !!d?.documentos?.factura;
-  document.getElementById("maq-doc-dc3").checked = !!d?.documentos?.dc3;
-  document.getElementById("maq-doc-tarjeta").checked = !!d?.documentos?.tarjetaCirculacion;
-  document.getElementById("maq-doc-poliza").checked = !!d?.documentos?.poliza;
+  DOCUMENTOS_TIPOS.forEach(({ campo, idSufijo, label }) => {
+    const docNorm = normalizarDocumento(d?.documentos?.[campo]);
+    document.getElementById(`maq-doc-${idSufijo}`).checked = docNorm.tiene;
+    document.getElementById(`maq-doc-${idSufijo}-file`).value = ""; // nunca se precarga el input file
+    document.getElementById(`maq-doc-${idSufijo}-venc`).value = docNorm.vencimiento || "";
+
+    const link = document.getElementById(`maq-doc-${idSufijo}-link`);
+    link.href = docNorm.url || "#";
+    link.classList.toggle("hidden", !docNorm.url);
+
+    const estado = estadoDocumento(docNorm);
+    const info = ESTADO_DOC_INFO[estado];
+    const badge = document.getElementById(`maq-doc-${idSufijo}-estado`);
+    badge.textContent = info.texto(campo);
+    badge.style.display = "inline-block";
+    badge.style.background = "transparent";
+    badge.style.border = `1px solid ${info.color}`;
+    badge.style.color = info.color;
+  });
 
   document.getElementById("btn-eliminar-maquinaria").classList.toggle("hidden", !(docId && Roles.puedeEliminarMaquinaria(currentRol)));
   document.getElementById("btn-descargar-consumos").classList.toggle("hidden", !docId); // solo tiene sentido en máquinas ya existentes
@@ -2137,6 +2234,78 @@ function abrirMaquinaria(docId) {
   document.getElementById("modal-maquinaria").classList.remove("hidden");
   navPush("modal-maquinaria");
 }
+
+/* ───────────────────────────── PERMISOS / DOCUMENTOS DE MAQUINARIA (punto 7.2) ───────────────────────────── */
+
+async function loadPermisos() {
+  const list = document.getElementById("permisos-list");
+  list.innerHTML = "Cargando...";
+  try {
+    const col = window.fbCollection(window.firebaseDB, "maquinaria");
+    const snap = await window.fbGetDocs(col);
+
+    const buscar = (document.getElementById("perm-f-buscar").value || "").trim().toUpperCase();
+    const fZona = document.getElementById("perm-f-zona").value;
+    const fProveedor = document.getElementById("perm-f-proveedor").value;
+    const fEstado = document.getElementById("perm-f-estado").value;
+
+    const zonasSet = new Set();
+    const proveedoresSet = new Set();
+    const items = [];
+
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      window._maquinariaCache[docSnap.id] = d;
+      if (d.zona) zonasSet.add(d.zona);
+      if (d.proveedor) proveedoresSet.add(d.proveedor);
+
+      if (buscar && !`${d.eco || ""} ${d.numInterno || ""}`.toUpperCase().includes(buscar)) return;
+      if (fZona && d.zona !== fZona) return;
+      if (fProveedor && d.proveedor !== fProveedor) return;
+
+      const docsNorm = DOCUMENTOS_TIPOS.map(t => ({ ...t, norm: normalizarDocumento(d.documentos?.[t.campo]), estado: estadoDocumento(normalizarDocumento(d.documentos?.[t.campo])) }));
+
+      if (fEstado === "faltante" && !docsNorm.some(x => x.estado === "faltante")) return;
+      if (fEstado === "vencido" && !docsNorm.some(x => x.estado === "vencido")) return;
+      if (fEstado === "porVencer" && !docsNorm.some(x => x.estado === "porVencer")) return;
+
+      items.push({ id: docSnap.id, ...d, docsNorm });
+    });
+
+    const zonaActual = fZona, provActual = fProveedor;
+    document.getElementById("perm-f-zona").innerHTML =
+      `<option value="">Todas las zonas</option>` + [...zonasSet].sort().map(z => `<option value="${z}">${z}</option>`).join("");
+    document.getElementById("perm-f-zona").value = zonaActual;
+    document.getElementById("perm-f-proveedor").innerHTML =
+      `<option value="">Todos los proveedores</option>` + [...proveedoresSet].sort().map(p => `<option value="${p}">${p}</option>`).join("");
+    document.getElementById("perm-f-proveedor").value = provActual;
+
+    if (!items.length) { list.innerHTML = "<p>No hay maquinaria que coincida con el filtro.</p>"; return; }
+
+    list.innerHTML = "";
+    items.sort((a, b) => (a.eco || "").localeCompare(b.eco || "")).forEach(d => {
+      const badges = d.docsNorm.map(({ label, norm, estado, campo }) => {
+        const info = ESTADO_DOC_INFO[estado];
+        const venc = norm.vencimiento ? ` · vence ${norm.vencimiento}` : "";
+        return `<div style="display:flex; justify-content:space-between; gap:6px; font-size:12px; padding:3px 0; border-bottom:1px solid var(--border);">
+          <span>${label}</span>
+          <span style="color:${info.color};">${info.texto(campo)}${venc}</span>
+        </div>`;
+      }).join("");
+
+      list.innerHTML += `
+        <div class="history-card" style="cursor:pointer;" onclick="abrirMaquinaria('${d.id}')">
+          <div class="hc-header"><span>${d.eco || d.numInterno || "—"}</span><span>${d.activa === false ? "🔴 Inactiva" : "🟢 Activa"}</span></div>
+          <p style="color:var(--text-muted); font-size:12px; margin:5px 0 8px;">${d.tipo || "—"} · ${d.zona || "Sin zona"}</p>
+          ${badges}
+        </div>`;
+    });
+  } catch (e) {
+    list.innerHTML = `<p style="color:var(--red);">❌ Error al cargar permisos: ${e.message}</p>`;
+    console.error("loadPermisos error:", e);
+  }
+}
+
 
 // Deshabilita/habilita todos los campos del formulario de Maquinaria y
 // oculta el botón "Guardar" cuando el rol actual no puede editar.
@@ -2173,6 +2342,36 @@ async function guardarMaquinaria() {
     const anterior = docId ? window._maquinariaCache[docId] : null;
     const cambioZona = anterior && (anterior.zona !== zona || anterior.subzona !== subzona);
 
+    // Documentos (punto 7.2): si se seleccionó un PDF nuevo para algún
+    // tipo, se sube primero a Storage; si no, se conserva la URL/path que
+    // ya existiera. El checkbox y la fecha de vencimiento son independientes
+    // de si hay PDF o no (se pueden marcar "se tiene" a mano, sin archivo).
+    const documentos = {};
+    for (const { campo, idSufijo } of DOCUMENTOS_TIPOS) {
+      const anteriorDoc = normalizarDocumento(anterior?.documentos?.[campo]);
+      const file = document.getElementById(`maq-doc-${idSufijo}-file`).files[0];
+      let url = anteriorDoc.url;
+      let path = anteriorDoc.path;
+      let subidoEn = anteriorDoc.subidoEn;
+      let subidoPor = anteriorDoc.subidoPor;
+
+      if (file) {
+        if (!eco) throw new Error(`Captura el # ECO antes de subir el PDF de "${campo}".`);
+        const subida = await subirDocumentoMaquinaria(file, eco, idSufijo);
+        url = subida.url;
+        path = subida.path;
+        subidoEn = window.fbTimestamp.now();
+        subidoPor = currentUser?.email || "—";
+      }
+
+      documentos[campo] = {
+        tiene: document.getElementById(`maq-doc-${idSufijo}`).checked || !!url,
+        url, path,
+        vencimiento: document.getElementById(`maq-doc-${idSufijo}-venc`).value || null,
+        subidoEn, subidoPor,
+      };
+    }
+
     const data = {
       tipo, marca,
       modelo: document.getElementById("maq-modelo").value.trim(),
@@ -2189,13 +2388,7 @@ async function guardarMaquinaria() {
       consumoAlto: parseFloat(document.getElementById("maq-consumo-alto").value) || null,
       consumoPromedio: parseFloat(document.getElementById("maq-consumo-promedio").value) || null,
       activa: document.getElementById("maq-activa").checked,
-      documentos: {
-        permiso: document.getElementById("maq-doc-permiso").checked,
-        factura: document.getElementById("maq-doc-factura").checked,
-        dc3: document.getElementById("maq-doc-dc3").checked,
-        tarjetaCirculacion: document.getElementById("maq-doc-tarjeta").checked,
-        poliza: document.getElementById("maq-doc-poliza").checked,
-      },
+      documentos,
       actualizadoEn: window.fbTimestamp.now(),
     };
 
@@ -2630,6 +2823,7 @@ window.guardarProveedor = guardarProveedor;
 window.eliminarProveedor = eliminarProveedor;
 window.descargarFotoProveedor = descargarFotoProveedor;
 window.loadMaquinaria = loadMaquinaria;
+window.loadPermisos = loadPermisos;
 window.abrirMaquinaria = abrirMaquinaria;
 window.cerrarModalMaquinaria = cerrarModalMaquinaria;
 window.guardarMaquinaria = guardarMaquinaria;
