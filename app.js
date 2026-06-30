@@ -406,6 +406,7 @@ function switchTab(name, desdePopstate = false) {
   if (name === "historial") loadHistory();
   if (name === "pendientes") loadPendientes();
   if (name === "usuarios" && Roles.puedeVerPanelUsuarios(currentRol)) loadUsuarios();
+  if (name === "proveedor" && Roles.puedeVerProveedor(currentRol)) loadProveedor();
   // Solo empujamos historial si NO venimos de Cargas→Cargas (evita
   // entradas duplicadas) y si el cambio fue un click real, no un popstate.
   if (!desdePopstate && name !== "cargas") navPush(`tab-${name}`);
@@ -432,7 +433,7 @@ function navPush(nivel) {
 
 window.addEventListener("popstate", (e) => {
   // ¿Hay un modal abierto? Ciérralo y no hagas nada más.
-  const modalesAbiertos = ["modal-pendiente", "modal-editar", "modal-usuario"]
+  const modalesAbiertos = ["modal-pendiente", "modal-editar", "modal-usuario", "modal-proveedor"]
     .filter(id => !document.getElementById(id)?.classList.contains("hidden"));
 
   if (modalesAbiertos.length > 0) {
@@ -440,6 +441,7 @@ window.addEventListener("popstate", (e) => {
       if (id === "modal-pendiente") cerrarModalPendiente(true);
       if (id === "modal-editar") cerrarModalEditar(true);
       if (id === "modal-usuario") cerrarModalUsuario(true);
+      if (id === "modal-proveedor") cerrarModalProveedor(true);
     });
     return;
   }
@@ -1171,6 +1173,180 @@ async function loadHistory() {
   }
 }
 
+/* --- PROVEEDOR (suministro diario de combustible) --- */
+let provFotoData = null;
+window._provCache = {};
+
+function previewProveedorFoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    compressImageToTarget(e.target.result, 220 * 1024, (comprimida) => {
+      provFotoData = comprimida;
+      document.getElementById("prov-img-ticket").src = comprimida;
+      document.getElementById("prov-preview-box").classList.remove("hidden");
+      document.getElementById("prov-ok-ticket").classList.remove("hidden");
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
+async function loadProveedor() {
+  if (!Roles.puedeVerProveedor(currentRol)) return;
+  const list = document.getElementById("proveedor-list");
+  const recBox = document.getElementById("prov-reconciliacion");
+  const fechaInput = document.getElementById("prov-fecha");
+  if (!fechaInput.value) fechaInput.value = new Date().toISOString().split("T")[0];
+  const fecha = fechaInput.value;
+
+  document.getElementById("btn-nuevo-proveedor")?.classList.toggle("hidden", !Roles.puedeSubirProveedor(currentRol));
+
+  list.innerHTML = "Cargando...";
+  recBox.innerHTML = "";
+  try {
+    const colProv = window.fbCollection(window.firebaseDB, "proveedor_cargas");
+    const qProv = window.fbQuery(colProv, window.fbWhere("fecha", "==", fecha));
+    const snapProv = await window.fbGetDocs(qProv);
+
+    const colReg = window.fbCollection(window.firebaseDB, "registros");
+    const qReg = window.fbQuery(colReg, window.fbWhere("fecha", "==", fecha));
+    const snapReg = await window.fbGetDocs(qReg);
+
+    let litrosProveedor = 0;
+    window._provCache = {};
+    const items = [];
+    snapProv.forEach(docSnap => {
+      const d = docSnap.data();
+      window._provCache[docSnap.id] = d;
+      litrosProveedor += Number(d.litros) || 0;
+      items.push({ id: docSnap.id, ...d });
+    });
+
+    let litrosCargados = 0;
+    snapReg.forEach(docSnap => { litrosCargados += Number(docSnap.data().litros) || 0; });
+
+    const diferencia = Math.round((litrosProveedor - litrosCargados) * 100) / 100;
+    const hayDescuadre = Math.abs(diferencia) > 0.5; // tolerancia mínima por redondeos
+    recBox.innerHTML = `
+      <div class="alert ${hayDescuadre ? 'alert-error' : 'alert-success'}" style="display:flex; flex-direction:column; gap:4px;">
+        <strong>${hayDescuadre ? '⚠️ Descuadre de litros' : '✅ Litros cuadrados'}</strong>
+        <span>Proveedor: ${litrosProveedor.toFixed(2)} L &nbsp;|&nbsp; Cargado a máquinas: ${litrosCargados.toFixed(2)} L &nbsp;|&nbsp; Diferencia: ${diferencia.toFixed(2)} L</span>
+      </div>`;
+
+    if (!items.length) { list.innerHTML = "<p>No hay cargas de proveedor para esta fecha.</p>"; return; }
+
+    list.innerHTML = "";
+    items.forEach(d => {
+      const puedeEditar = Roles.puedeEditarProveedor(currentRol);
+      list.innerHTML += `
+        <div class="history-card" style="cursor:default;">
+          <div class="hc-header"><span>${d.tipoCombustible}</span><span>${Number(d.litros).toFixed(2)} L</span></div>
+          <p style="color:var(--text-muted); font-size:12px; margin-top:5px;">
+            Precio: $${Number(d.precio || 0).toFixed(2)} • Subido por: ${d.usuario || "—"}
+          </p>
+          <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+            ${d.fotoTicket ? `<button class="btn btn-outline btn-sm" onclick="descargarFotoProveedor('${d.id}')">📥 Descargar ticket</button>` : ""}
+            ${puedeEditar ? `<button class="btn btn-ghost btn-sm" onclick="abrirProveedor('${d.id}')">✏️ Editar</button>` : ""}
+          </div>
+        </div>`;
+    });
+  } catch (e) {
+    list.innerHTML = `<p style="color:var(--red);">❌ Error al cargar proveedor: ${e.message}</p>`;
+    console.error("loadProveedor error:", e);
+  }
+}
+
+function abrirProveedor(docId) {
+  const d = docId ? window._provCache[docId] : null;
+  document.getElementById("proveedor-modal-title").textContent = docId ? "Editar carga de proveedor" : "Nueva carga de proveedor";
+  document.getElementById("prov-doc-id").value = docId || "";
+  document.getElementById("prov-f-fecha").value = d?.fecha || document.getElementById("prov-fecha").value || new Date().toISOString().split("T")[0];
+  document.getElementById("prov-f-tipo").value = d?.tipoCombustible || "Magna";
+  document.getElementById("prov-f-litros").value = d?.litros ?? "";
+  document.getElementById("prov-f-precio").value = d?.precio ?? "";
+  document.getElementById("proveedor-error").classList.add("hidden");
+  provFotoData = d?.fotoTicket || null;
+  document.getElementById("prov-img-ticket").src = provFotoData || "";
+  document.getElementById("prov-preview-box").classList.toggle("hidden", !provFotoData);
+  document.getElementById("prov-ok-ticket").classList.toggle("hidden", !provFotoData);
+  document.getElementById("btn-eliminar-proveedor").classList.toggle("hidden", !(docId && Roles.puedeEliminarProveedor(currentRol)));
+  document.getElementById("modal-proveedor").classList.remove("hidden");
+  navPush("modal-proveedor");
+}
+
+function cerrarModalProveedor(desdePopstate = false) {
+  document.getElementById("modal-proveedor").classList.add("hidden");
+  if (!desdePopstate) history.back();
+}
+
+async function guardarProveedor() {
+  const errBox = document.getElementById("proveedor-error");
+  errBox.classList.add("hidden");
+
+  const docId = document.getElementById("prov-doc-id").value;
+  const fecha = document.getElementById("prov-f-fecha").value;
+  const tipoCombustible = document.getElementById("prov-f-tipo").value;
+  const litros = parseFloat(document.getElementById("prov-f-litros").value);
+  const precio = parseFloat(document.getElementById("prov-f-precio").value);
+
+  if (!fecha) { errBox.textContent = "Selecciona la fecha."; errBox.classList.remove("hidden"); return; }
+  if (!litros || litros <= 0) { errBox.textContent = "Ingresa los litros suministrados."; errBox.classList.remove("hidden"); return; }
+  if (!precio || precio <= 0) { errBox.textContent = "Ingresa el precio por litro."; errBox.classList.remove("hidden"); return; }
+  if (provFotoData && tamanoBase64Bytes(provFotoData) > 850 * 1024) {
+    errBox.textContent = "La foto del ticket pesa demasiado, vuelve a tomarla."; errBox.classList.remove("hidden"); return;
+  }
+
+  showLoading("Guardando carga de proveedor...");
+  try {
+    const data = {
+      fecha, tipoCombustible, litros, precio,
+      fotoTicket: provFotoData || null,
+      usuario: window.firebaseAuth?.currentUser?.email || "—",
+    };
+    if (docId) {
+      await window.fbUpdateDoc(window.fbDoc(window.firebaseDB, "proveedor_cargas", docId), data);
+    } else {
+      data.creadoEn = window.fbTimestamp.now();
+      const docRef = window.fbDoc(window.fbCollection(window.firebaseDB, "proveedor_cargas"));
+      await window.fbSetDoc(docRef, data);
+    }
+    hideLoading();
+    cerrarModalProveedor();
+    loadProveedor();
+  } catch (e) {
+    hideLoading();
+    errBox.textContent = "Error: " + e.message;
+    errBox.classList.remove("hidden");
+  }
+}
+
+async function eliminarProveedor() {
+  if (!Roles.puedeEliminarProveedor(currentRol)) return;
+  const docId = document.getElementById("prov-doc-id").value;
+  if (!docId) return;
+  if (!confirm("¿Eliminar esta carga de proveedor? Esta acción no se puede deshacer.")) return;
+  showLoading("Eliminando...");
+  try {
+    await window.fbDeleteDoc(window.fbDoc(window.firebaseDB, "proveedor_cargas", docId));
+    hideLoading();
+    cerrarModalProveedor();
+    loadProveedor();
+  } catch (e) {
+    hideLoading();
+    alert("Error al eliminar: " + e.message);
+  }
+}
+
+function descargarFotoProveedor(docId) {
+  const d = window._provCache[docId];
+  if (!d?.fotoTicket) return;
+  const a = document.createElement("a");
+  a.href = d.fotoTicket;
+  a.download = `ticket-proveedor-${d.fecha}-${docId}.jpg`;
+  a.click();
+}
+
 /* --- USUARIOS Y ROLES (Master, Admin, Coordinador según roles.js) --- */
 async function loadUsuarios() {
   const list = document.getElementById("usuarios-list");
@@ -1651,3 +1827,10 @@ window.loadPendientes = loadPendientes;
 window.resetFormulario = resetFormulario;
 window.sincronizarCola = sincronizarCola;
 window.setHorometroMode = setHorometroMode;
+window.loadProveedor = loadProveedor;
+window.previewProveedorFoto = previewProveedorFoto;
+window.abrirProveedor = abrirProveedor;
+window.cerrarModalProveedor = cerrarModalProveedor;
+window.guardarProveedor = guardarProveedor;
+window.eliminarProveedor = eliminarProveedor;
+window.descargarFotoProveedor = descargarFotoProveedor;
