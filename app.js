@@ -40,6 +40,67 @@ window.addEventListener("appinstalled", () => {
 });
 
 /* ─────────────────────────────────────────────────────────────────
+   FOTOS EN CLOUD STORAGE (antes iban como base64 dentro del propio
+   documento de Firestore — eso funcionaba pero pega contra el límite
+   de ~1 MiB por documento y hace los documentos pesados de leer).
+   Ahora cada foto se sube a Storage y en Firestore solo se guarda la
+   URL de descarga. Se mantiene compatibilidad con registros viejos
+   que ya tengan base64 guardado (urlADataURL los detecta y los deja tal cual).
+───────────────────────────────────────────────────────────────── */
+function esFotoBase64(v) {
+  return typeof v === "string" && v.startsWith("data:");
+}
+
+function rutaSegura(s) {
+  return (s || "SIN-DATO").toString().replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
+// Sube UNA foto (data URL) a Storage y devuelve su URL de descarga.
+// Si no hay dato (null/undefined) regresa null sin tocar la red.
+async function subirFotoAStorage(dataUrl, carpeta, nombreArchivo) {
+  if (!esFotoBase64(dataUrl)) return dataUrl ?? null; // ya es URL o está vacío
+  const path = `${carpeta}/${nombreArchivo}_${Date.now()}.jpg`;
+  const sref = window.fbStorageRef(window.firebaseStorage, path);
+  await window.fbUploadString(sref, dataUrl, "data_url");
+  return await window.fbGetDownloadURL(sref);
+}
+
+// Sube las 4 fotos de un registro de Carga (las que vengan en base64) y
+// devuelve un NUEVO objeto record con esos campos ya como URL de Storage.
+// No muta el record original (así el llamador puede seguir usando la
+// versión base64 para generar el PDF al instante, sin esperar la red).
+async function subirFotosDeRegistro(record) {
+  const carpeta = `registros/${rutaSegura(record.fecha)}/${rutaSegura(record.eco)}`;
+  const out = { ...record };
+  out.fotoInicial   = await subirFotoAStorage(record.fotoInicial,   carpeta, "inicial");
+  out.fotoFinal     = await subirFotoAStorage(record.fotoFinal,     carpeta, "final");
+  out.fotoTicket    = await subirFotoAStorage(record.fotoTicket,    carpeta, "ticket");
+  out.fotoHorometro = await subirFotoAStorage(record.fotoHorometro, carpeta, "horometro");
+  return out;
+}
+
+// Convierte cualquier campo de foto (URL de Storage o base64 viejo) a un
+// data URL utilizable por jsPDF (doc.addImage). Si ya es base64 lo regresa
+// tal cual (registros antiguos); si es una URL, la descarga y la convierte.
+async function urlADataURL(valor) {
+  if (!valor) return null;
+  if (esFotoBase64(valor)) return valor;
+  try {
+    const resp = await fetch(valor);
+    const blob = await resp.blob();
+    return await new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onloadend = () => res(reader.result);
+      reader.onerror = () => rej(new Error("No se pudo leer la foto descargada."));
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    console.error("urlADataURL: no se pudo descargar la foto desde Storage:", e);
+    return null;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────
    COLA OFFLINE — IndexedDB
    Cuando no hay internet, los registros se guardan localmente y se
    sincronizan automáticamente cuando vuelve la conexión.
@@ -113,8 +174,13 @@ async function sincronizarCola() {
         ? window.fbTimestamp.fromDate(new Date(creadoEn))
         : new Date(creadoEn);
 
+      // Las fotos se guardaron en base64 en IndexedDB (no había internet
+      // para subirlas a Storage en su momento). Ahora que sí hay
+      // conexión, las subimos y dejamos las URLs en el registro final.
+      const recordConFotosEnStorage = await subirFotosDeRegistro(record);
+
       const docRef = window.fbDoc(window.fbCollection(window.firebaseDB, "registros"));
-      await window.fbSetDoc(docRef, record);
+      await window.fbSetDoc(docRef, recordConFotosEnStorage);
       await eliminarDeCola(localId);
       console.log(`✅ Sincronizado registro offline: ${record.eco} — ${record.fecha}`);
     } catch(e) {
@@ -158,6 +224,7 @@ async function loadFirebase() {
   const { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js");
   const { getFirestore, collection, addDoc, getDocs, getDoc, query, where, orderBy, Timestamp, limit, doc, updateDoc, setDoc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
   const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-functions.js");
+  const { getStorage, ref, uploadString, getDownloadURL } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js");
 
   const firebaseConfig = {
     apiKey:            "AIzaSyCeIsd_BrHKbAY1HrYb3HL4vG4cpadUTuU",
@@ -187,6 +254,12 @@ async function loadFirebase() {
   window.fbUpdateDoc  = updateDoc;
   window.fbSetDoc     = setDoc;
   window.fbDeleteDoc  = deleteDoc;
+
+  // --- Cloud Storage (fotos de Cargas/Proveedor y, a futuro, PDFs de Maquinaria) ---
+  window.firebaseStorage  = getStorage(app);
+  window.fbStorageRef     = ref;
+  window.fbUploadString   = uploadString;
+  window.fbGetDownloadURL = getDownloadURL;
 
   // --- Funciones invocables (Cloud Functions con Admin SDK) ---
   // Se usan para operaciones que el SDK de cliente NO puede hacer sobre
@@ -969,25 +1042,55 @@ const docRef = window.fbDoc(window.fbCollection(window.firebaseDB, "registros"))
       andonAlertas: alertasAndon, // [] si no hubo inconsistencias, o lista de leyendas a imprimir
     };
 
-    // 1. INTENTAR GUARDAR EN FIREBASE; si no hay internet, guardar en cola offline
+    // 1. SUBIR FOTOS A STORAGE (si hay internet). El PDF se genera siempre
+    // con las fotos en base64 que ya tenemos en memoria (record), así que
+    // no depende de la velocidad de la subida ni de volver a descargarlas.
+    let recordParaGuardar;
     try {
-      await window.fbSetDoc(docRef, record);
-    } catch (firebaseErr) {
-      if (!navigator.onLine || firebaseErr.code === "unavailable" || firebaseErr.message.includes("offline")) {
-        // SIN INTERNET — guardar localmente
-        await guardarEnCola(record);
-        actualizarBannerConexion();
-        hideLoading();
-        alert("📵 Sin conexión — el registro se guardó localmente y se subirá automáticamente cuando vuelva internet.");
-        resetFormulario();
-        switchTab("historial");
-        return;
+      if (!navigator.onLine) throw new Error("Sin conexión");
+      recordParaGuardar = await subirFotosDeRegistro(record);
+    } catch (uploadErr) {
+      // Sin internet o falló la subida de alguna foto — todo se va a la
+      // cola offline CON las fotos en base64; se subirán a Storage solas
+      // cuando vuelva la conexión (ver sincronizarCola).
+      await guardarEnCola(record);
+      actualizarBannerConexion();
+
+      if (!isPendiente) {
+        try {
+          const pdfOffline = await generateTicketPDF(record);
+          pdfOffline.save(`FuelControl_${eco}_${record.ticket}.pdf`);
+        } catch (pdfErr) {
+          console.error("No se pudo generar el PDF en modo offline:", pdfErr);
+        }
       }
-      // Error real de Firebase (permisos, etc.) — propagar
-      throw firebaseErr;
+
+      hideLoading();
+      alert("📵 Sin conexión (o no se pudieron subir las fotos) — el registro se guardó localmente y se sincronizará solo cuando vuelva internet.");
+      resetFormulario();
+      switchTab("historial");
+      return;
     }
 
-    // 2. SOLO SI FIREBASE GUARDÓ CON ÉXITO, GENERAMOS EL PDF
+    // 2. GUARDAR EN FIRESTORE (ya con las URLs de Storage en vez de base64)
+    try {
+      await window.fbSetDoc(docRef, recordParaGuardar);
+    } catch (firebaseErr) {
+      // Las fotos YA se subieron a Storage; si aquí falla (se cayó la
+      // conexión justo en este instante), mandamos el registro —ya con
+      // URLs— a la cola offline. sincronizarCola no las vuelve a subir
+      // porque ya no son base64.
+      await guardarEnCola(recordParaGuardar);
+      actualizarBannerConexion();
+      hideLoading();
+      alert("📵 Las fotos se subieron pero no se pudo guardar el registro — se guardó localmente y se reintentará solo cuando vuelva internet.");
+      resetFormulario();
+      switchTab("historial");
+      return;
+    }
+
+    // 3. SOLO SI FIREBASE GUARDÓ CON ÉXITO, GENERAMOS EL PDF (con las fotos
+    // en base64 que ya teníamos en memoria, sin tener que descargarlas de Storage)
     if(!isPendiente) {
       showLoading("Datos guardados. Generando PDF...");
       const pdfDoc = await generateTicketPDF(record);
@@ -1108,15 +1211,23 @@ async function guardarPendiente() {
   showLoading("Cerrando registro y generando PDF...");
   try {
     const docRef = window.fbDoc(window.firebaseDB, "registros", docPendienteActual);
+    const original = _getRegistroCache(docPendienteActual) || {};
+    const fotoTicketUrl = await subirFotoAStorage(
+      dataFotos.pend,
+      `registros/${rutaSegura(original.fecha)}/${rutaSegura(original.eco)}`,
+      "ticket"
+    );
     await window.fbUpdateDoc(docRef, {
       ticket: ticketVal,
-      fotoTicket: dataFotos.pend,
+      fotoTicket: fotoTicketUrl,
       status: "completado"
     });
 
     const docSnap = await window.fbGetDoc(window.fbDoc(window.firebaseDB, "registros", docPendienteActual));
     const record = docSnap.data();
 
+    // Para el PDF usamos la foto que ya tenemos en memoria (base64), no
+    // hace falta volver a descargarla de Storage justo después de subirla.
     record.fotoTicket = dataFotos.pend;
     record.ticket = ticketVal;
 
@@ -1386,9 +1497,10 @@ async function guardarProveedor() {
 
   showLoading("Guardando carga de proveedor...");
   try {
+    const fotoTicketUrl = await subirFotoAStorage(provFotoData, `proveedor/${rutaSegura(fecha)}`, "ticket");
     const data = {
       fecha, tipoCombustible, litros, precio,
-      fotoTicket: provFotoData || null,
+      fotoTicket: fotoTicketUrl,
       usuario: window.firebaseAuth?.currentUser?.email || "—",
     };
     if (docId) {
@@ -1425,11 +1537,16 @@ async function eliminarProveedor() {
   }
 }
 
-function descargarFotoProveedor(docId) {
+async function descargarFotoProveedor(docId) {
   const d = window._provCache[docId];
   if (!d?.fotoTicket) return;
+  // El atributo download del navegador no funciona de forma confiable con
+  // URLs de otro origen (como las de Storage), así que primero la
+  // convertimos a data URL y de ahí sí se descarga sin abrir pestaña nueva.
+  const dataUrl = await urlADataURL(d.fotoTicket);
+  if (!dataUrl) { alert("❌ No se pudo descargar la foto del ticket."); return; }
   const a = document.createElement("a");
-  a.href = d.fotoTicket;
+  a.href = dataUrl;
   a.download = `ticket-proveedor-${d.fecha}-${docId}.jpg`;
   a.click();
 }
@@ -1623,81 +1740,26 @@ async function eliminarUsuario() {
 }
 
 /* --- EXPORTAR EXCEL (XLSX) --- */
-async function exportExcel() {
-  showLoading("Generando Excel...");
-  try {
-    // Cargar SheetJS desde CDN si aún no está disponible
-    if (!window.XLSX) {
-      await new Promise((res, rej) => {
-        const s = document.createElement("script");
-        s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
-        s.onload = res;
-        s.onerror = () => rej(new Error("No se pudo cargar la librería de Excel."));
-        document.head.appendChild(s);
-      });
-    }
-
-    const col = window.fbCollection(window.firebaseDB, "registros");
-    const snap = await window.fbGetDocs(col);
-
-    if (snap.empty) { hideLoading(); alert("No hay registros para exportar."); return; }
-
-   const headers = ["# Economico", "Fecha Carga", "Horometro Inicial", "Carga (Litros)", "Combustible", "Ticket"];
-    const filas = [headers];
-
-    snap.forEach(docSnap => {
-      const d = docSnap.data();
-
-      // Horómetro con último dígito como decimal. Si no tiene horómetro → 0
-      let horoDecimal = 0;
-      if (typeof d.horometroRaw === "number") {
-        const horas = Math.floor(d.horometroRaw / 10);
-        const decimas = d.horometroRaw % 10;
-        horoDecimal = parseFloat(`${horas}.${decimas}`);
-      }
-
-      filas.push([
-        d.eco || "",
-        d.fecha || "",
-        horoDecimal,
-        typeof d.litros === "number" ? d.litros : (parseFloat(d.litros) || ""),
-        d.tipoCombustible || "",
-        d.ticket || ""
-      ]);
-    });
-
-    const ws = window.XLSX.utils.aoa_to_sheet(filas);
-
-    ws["!cols"] = [
-      { wch: 18 }, // # Economico
-      { wch: 14 }, // Fecha Carga
-      { wch: 18 }, // Horometro Inicial
-      { wch: 14 }, // Carga (Litros)
-      { wch: 12 }, // Combustible
-      { wch: 14 }, // Ticket
-    ];
-
-    // Encabezados en negrita
-    const rangoEncabezado = window.XLSX.utils.decode_range(ws["!ref"]);
-    for (let c = rangoEncabezado.s.c; c <= rangoEncabezado.e.c; c++) {
-      const celda = ws[window.XLSX.utils.encode_cell({ r: 0, c })];
-      if (celda) celda.s = { font: { bold: true } };
-    }
-
-    const wb = window.XLSX.utils.book_new();
-    window.XLSX.utils.book_append_sheet(wb, ws, "Registros");
-
-    window.XLSX.writeFile(wb, `FuelControl_Export_${new Date().toISOString().split("T")[0]}.xlsx`);
-
-    hideLoading();
-  } catch (e) {
-    hideLoading();
-    alert("Error al exportar: " + e.message);
-  }
-}
+// NOTA: la antigua función exportExcel() (de la pestaña "Exportar") se quitó
+// de aquí — esa pestaña ya no existe en la app (punto 5.1, se reemplazó por
+// "Resumen"). El export general de TODOS los registros que hacía ya no tenía
+// ningún botón que la llamara. La exportación a Excel ahora vive en
+// descargarConsumosMaquinaria(), por máquina individual (punto 7).
 
 /* --- GENERAR PDF MAESTRO CON 3 FOTOS Y RENDIMIENTO --- */
 async function generateTicketPDF(record) {
+  // Compatibilidad: las fotos pueden venir como base64 (registros viejos,
+  // o el mismo registro recién capturado en memoria) o como URL de Storage
+  // (registros nuevos leídos de Firestore). jsPDF solo puede dibujar
+  // base64/data URL, así que aquí normalizamos antes de construir el PDF.
+  record = {
+    ...record,
+    fotoInicial:   await urlADataURL(record.fotoInicial),
+    fotoFinal:     await urlADataURL(record.fotoFinal),
+    fotoTicket:    await urlADataURL(record.fotoTicket),
+    fotoHorometro: await urlADataURL(record.fotoHorometro),
+  };
+
   if (!window.jspdf) {
     await new Promise((res, rej) => {
       const s = document.createElement("script");
@@ -2004,7 +2066,7 @@ async function loadMaquinaria() {
       const docsOk = d.documentos ? Object.values(d.documentos).filter(Boolean).length : 0;
       const docsTotal = 5;
       list.innerHTML += `
-        <div class="history-card" style="cursor:${puedeEditar ? "pointer" : "default"};" ${puedeEditar ? `onclick="abrirMaquinaria('${d.id}')"` : ""}>
+        <div class="history-card" style="cursor:pointer;" onclick="abrirMaquinaria('${d.id}')">
           <div class="hc-header"><span>${d.eco || d.numInterno || "—"}</span><span>${d.activa === false ? "🔴 Inactiva" : "🟢 Activa"}</span></div>
           <p style="color:var(--text-muted); font-size:12px; margin-top:5px;">
             ${d.tipo || "—"} · ${d.marca || ""} ${d.modelo || ""}<br/>
@@ -2065,8 +2127,23 @@ function abrirMaquinaria(docId) {
   document.getElementById("maq-doc-poliza").checked = !!d?.documentos?.poliza;
 
   document.getElementById("btn-eliminar-maquinaria").classList.toggle("hidden", !(docId && Roles.puedeEliminarMaquinaria(currentRol)));
+  document.getElementById("btn-descargar-consumos").classList.toggle("hidden", !docId); // solo tiene sentido en máquinas ya existentes
+
+  // Modo solo-lectura: roles sin permiso de edición (ej. Visor, Residente)
+  // pueden abrir la ficha para CONSULTAR y descargar consumos, pero no
+  // pueden tocar ni guardar nada.
+  setMaquinariaFormReadOnly(!Roles.puedeEditarMaquinaria(currentRol));
+
   document.getElementById("modal-maquinaria").classList.remove("hidden");
   navPush("modal-maquinaria");
+}
+
+// Deshabilita/habilita todos los campos del formulario de Maquinaria y
+// oculta el botón "Guardar" cuando el rol actual no puede editar.
+function setMaquinariaFormReadOnly(soloLectura) {
+  const modal = document.getElementById("modal-maquinaria");
+  modal.querySelectorAll(".field-input, input[type=checkbox]").forEach(el => { el.disabled = soloLectura; });
+  document.getElementById("btn-guardar-maquinaria").classList.toggle("hidden", soloLectura);
 }
 
 function cerrarModalMaquinaria(desdePopstate = false) {
@@ -2182,6 +2259,81 @@ async function eliminarMaquinaria() {
   } catch (e) {
     hideLoading();
     alert("Error al eliminar: " + e.message);
+  }
+}
+
+/* --- DESCARGA DE CONSUMOS DE UNA MÁQUINA (punto 7) ---
+   Tabla en Excel con: fecha, carga (L), tipo de combustible y
+   rendimiento (lt/hr), de TODAS las cargas registradas para esa máquina. */
+async function cargarSheetJS() {
+  if (window.XLSX) return;
+  await new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    s.onload = res;
+    s.onerror = () => rej(new Error("No se pudo cargar la librería de Excel. Revisa tu conexión a internet."));
+    document.head.appendChild(s);
+  });
+}
+
+async function descargarConsumosMaquinaria() {
+  const docId = document.getElementById("maq-doc-id").value;
+  if (!docId) return;
+  const d = window._maquinariaCache[docId];
+  if (!d) { alert("No se encontró la maquinaria en caché. Vuelve a abrir la ficha e intenta de nuevo."); return; }
+
+  // Mismo criterio que usa el catálogo de Cargas para # ECO: numInterno
+  // tiene prioridad, luego eco, luego el id del documento.
+  const interno = d.numInterno || d.eco || docId;
+
+  showLoading("Generando tabla de consumos...");
+  try {
+    await cargarSheetJS();
+
+    const col = window.fbCollection(window.firebaseDB, "registros");
+    const q = window.fbQuery(col, window.fbWhere("eco", "==", interno));
+    const snap = await window.fbGetDocs(q);
+
+    if (snap.empty) {
+      hideLoading();
+      alert(`No hay cargas de combustible registradas para ${interno} todavía.`);
+      return;
+    }
+
+    const registrosOrdenados = snap.docs
+      .map(ds => ds.data())
+      .sort((a, b) => (a.fecha || "").localeCompare(b.fecha || ""));
+
+    const filas = [["Fecha", "Carga (L)", "Tipo de combustible", "Rendimiento (lt/hr)"]];
+    registrosOrdenados.forEach(r => {
+      const rendimientoNumerico =
+        typeof r.rendimiento === "string" && !isNaN(parseFloat(r.rendimiento))
+          ? parseFloat(r.rendimiento)
+          : (r.rendimiento || "—");
+      filas.push([
+        r.fecha || "",
+        typeof r.litros === "number" ? r.litros : (parseFloat(r.litros) || ""),
+        r.tipoCombustible || "",
+        rendimientoNumerico,
+      ]);
+    });
+
+    const ws = window.XLSX.utils.aoa_to_sheet(filas);
+    ws["!cols"] = [{ wch: 14 }, { wch: 12 }, { wch: 18 }, { wch: 18 }];
+    const rango = window.XLSX.utils.decode_range(ws["!ref"]);
+    for (let c = rango.s.c; c <= rango.e.c; c++) {
+      const celda = ws[window.XLSX.utils.encode_cell({ r: 0, c })];
+      if (celda) celda.s = { font: { bold: true } };
+    }
+
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, "Consumos");
+    window.XLSX.writeFile(wb, `Consumos_${rutaSegura(interno)}_${new Date().toISOString().split("T")[0]}.xlsx`);
+
+    hideLoading();
+  } catch (e) {
+    hideLoading();
+    alert("Error al generar la tabla de consumos: " + e.message);
   }
 }
 
@@ -2452,7 +2604,7 @@ window.abrirPendiente = abrirPendiente;
 window.cerrarModalPendiente = cerrarModalPendiente;
 window.guardarPendiente = guardarPendiente;
 window.loadHistory = loadHistory;
-window.exportExcel = exportExcel;
+window.descargarConsumosMaquinaria = descargarConsumosMaquinaria;
 window.installApp = installApp;
 window.autoCompletarEquipoEdit = autoCompletarEquipoEdit;
 window.abrirEditar = abrirEditar;
