@@ -1237,7 +1237,7 @@ async function generateTicketPDF(record) {
   // sin deformarse (letterbox: se ajusta al lado que limite y se centra).
   function dibujarFotoEnCaja(data, x, yPos, w, h, label, textoFaltante) {
     doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
-    doc.text(label, x, yPos - 0.08);
+    doc.text(label, x, yPos - 0.12);
 
     if (!data) {
       dibujarPlaceholder(x, yPos, w, h, textoFaltante || "Foto no disponible");
@@ -1300,7 +1300,7 @@ async function generateTicketPDF(record) {
   // eso no quepa en la altura disponible (p. ej. con 3 bloques apilados);
   // en ese caso se reduce el lado para que los cuadros + sus etiquetas y
   // separaciones siempre entren en la página, sin desbordarse.
-  const espacioLabel = 0.22;  // alto reservado para el texto encima de cada cuadro
+  const espacioLabel = 0.3;  // alto reservado para el texto encima de cada cuadro (con aire real, sin tocar la imagen)
   const gapVerticalMin = 0.15;
   const nBloques = bloquesIzq.length;
 
