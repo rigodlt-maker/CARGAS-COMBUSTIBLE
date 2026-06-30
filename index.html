@@ -300,10 +300,21 @@
 
   <div class="tab-content" id="content-maquinaria">
     <div class="list-container">
-      <div class="list-header"><h2>🚜 Maquinaria</h2><p>Catálogo de equipos. Disponible próximamente.</p></div>
-      <div style="text-align:center; padding:40px 15px; color: var(--text-muted);">
-        <p style="font-size:14px;">Esta sección estará disponible próximamente.</p>
+      <div class="list-header"><h2>🚜 Maquinaria</h2></div>
+      <div class="field-group">
+        <input type="text" id="maq-f-buscar" class="field-input" placeholder="Buscar por # ECO / # interno..." oninput="loadMaquinaria()" />
       </div>
+      <div class="filter-row" style="margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+        <select id="maq-f-zona" class="field-input" style="flex:1; min-width:120px;" onchange="loadMaquinaria()"><option value="">Todas las zonas</option></select>
+        <select id="maq-f-proveedor" class="field-input" style="flex:1; min-width:120px;" onchange="loadMaquinaria()"><option value="">Todos los proveedores</option></select>
+        <select id="maq-f-activa" class="field-input" style="flex:1; min-width:120px;" onchange="loadMaquinaria()">
+          <option value="">Activa / Inactiva</option>
+          <option value="activa">Solo activas</option>
+          <option value="inactiva">Solo inactivas</option>
+        </select>
+      </div>
+      <button id="btn-nueva-maquina" class="btn btn-primary hidden" onclick="abrirMaquinaria()" style="margin-bottom:15px; width:100%;">+ Agregar nueva maquinaria</button>
+      <div id="maquinaria-list" class="history-list"></div>
     </div>
   </div>
 
@@ -420,6 +431,79 @@
     <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="guardarProveedor()">Guardar</button>
     <button id="btn-eliminar-proveedor" class="btn btn-outline hidden" style="width:100%; margin-top:10px; color:var(--red); border-color:var(--red);" onclick="eliminarProveedor()">🗑️ Eliminar carga</button>
     <button class="btn btn-ghost" style="width:100%; margin-top:10px;" onclick="cerrarModalProveedor()">Cancelar</button>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Alta / edición de Maquinaria ═══ -->
+<div id="modal-maquinaria" class="modal-overlay hidden" onclick="if(event.target===this) cerrarModalMaquinaria()">
+  <div class="modal-card">
+    <h3 id="maquinaria-modal-title" style="color:var(--orange); margin-bottom:10px;">Nueva maquinaria</h3>
+    <input type="hidden" id="maq-doc-id" />
+
+    <div class="field-group">
+      <label class="field-label">Tipo de maquinaria</label>
+      <select id="maq-tipo" class="field-input" onchange="toggleOtroMaquinaria('tipo')"></select>
+      <input type="text" id="maq-tipo-otro" class="field-input hidden" placeholder="Escribe el tipo de maquinaria" style="margin-top:6px;" />
+    </div>
+    <div class="field-group">
+      <label class="field-label">Marca</label>
+      <select id="maq-marca" class="field-input" onchange="toggleOtroMaquinaria('marca')"></select>
+      <input type="text" id="maq-marca-otro" class="field-input hidden" placeholder="Escribe la marca" style="margin-top:6px;" />
+    </div>
+    <div class="field-group"><label class="field-label">Modelo</label><input type="text" id="maq-modelo" class="field-input" placeholder="Ej. 980K, LS138, PC450" /></div>
+    <div class="field-group" style="display:flex; gap:10px;">
+      <div style="flex:1;"><label class="field-label"># Económico (ECO)</label><input type="text" id="maq-eco" class="field-input" /></div>
+      <div style="flex:1;"><label class="field-label"># Interno</label><input type="text" id="maq-num-interno" class="field-input" /></div>
+    </div>
+    <div class="field-group"><label class="field-label"># de Serie</label><input type="text" id="maq-serie" class="field-input" /></div>
+    <div class="field-group"><label class="field-label">Fecha de ingreso</label><input type="date" id="maq-fecha-ingreso" class="field-input" /></div>
+    <div class="field-group"><label class="field-label">Fecha de egreso (si aplica)</label><input type="date" id="maq-fecha-egreso" class="field-input" /></div>
+
+    <div class="field-group" style="display:flex; gap:10px;">
+      <div style="flex:1;">
+        <label class="field-label">Zona</label>
+        <select id="maq-zona" class="field-input" onchange="poblarSubzonas()"></select>
+      </div>
+      <div style="flex:1;">
+        <label class="field-label">Subzona / ubicación</label>
+        <select id="maq-subzona" class="field-input"></select>
+      </div>
+    </div>
+
+    <div class="field-group" style="display:flex; gap:10px;">
+      <div style="flex:1;"><label class="field-label">Proveedor</label><input type="text" id="maq-proveedor" class="field-input" /></div>
+      <div style="flex:1;">
+        <label class="field-label">Propiedad</label>
+        <select id="maq-propiedad" class="field-input">
+          <option value="Propia">Propia</option>
+          <option value="Rentada">Rentada</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field-group"><label class="field-label">Capacidad de tanque (L)</label><input type="number" id="maq-capacidad" class="field-input" /></div>
+    <div class="field-group" style="display:flex; gap:8px;">
+      <div style="flex:1;"><label class="field-label">Consumo bajo (lt/hr)</label><input type="number" id="maq-consumo-bajo" class="field-input" /></div>
+      <div style="flex:1;"><label class="field-label">Medio</label><input type="number" id="maq-consumo-medio" class="field-input" /></div>
+      <div style="flex:1;"><label class="field-label">Alto</label><input type="number" id="maq-consumo-alto" class="field-input" /></div>
+    </div>
+    <div class="field-group"><label class="field-label">Consumo promedio (lt/hr)</label><input type="number" id="maq-consumo-promedio" class="field-input" /></div>
+
+    <label class="toggle-label" style="margin:10px 0; display:block;"><input type="checkbox" id="maq-activa" checked /> Maquinaria activa</label>
+
+    <div class="field-group">
+      <label class="field-label" style="margin-bottom:8px; display:block;">Documentos (✔ = se tiene, ✘ = falta — se podrán subir después)</label>
+      <label class="toggle-label" style="display:block; margin-bottom:6px;"><input type="checkbox" id="maq-doc-permiso" /> Permiso</label>
+      <label class="toggle-label" style="display:block; margin-bottom:6px;"><input type="checkbox" id="maq-doc-factura" /> Factura</label>
+      <label class="toggle-label" style="display:block; margin-bottom:6px;"><input type="checkbox" id="maq-doc-dc3" /> DC3</label>
+      <label class="toggle-label" style="display:block; margin-bottom:6px;"><input type="checkbox" id="maq-doc-tarjeta" /> Tarjeta de circulación</label>
+      <label class="toggle-label" style="display:block;"><input type="checkbox" id="maq-doc-poliza" /> Póliza</label>
+    </div>
+
+    <div id="maquinaria-error" class="alert alert-error hidden" style="margin-top:10px;"></div>
+    <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="guardarMaquinaria()">Guardar</button>
+    <button id="btn-eliminar-maquinaria" class="btn btn-outline hidden" style="width:100%; margin-top:10px; color:var(--red); border-color:var(--red);" onclick="eliminarMaquinaria()">🗑️ Eliminar maquinaria</button>
+    <button class="btn btn-ghost" style="width:100%; margin-top:10px;" onclick="cerrarModalMaquinaria()">Cancelar</button>
   </div>
 </div>
 
