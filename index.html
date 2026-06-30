@@ -501,7 +501,8 @@
     </div>
 
     <div id="maquinaria-error" class="alert alert-error hidden" style="margin-top:10px;"></div>
-    <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="guardarMaquinaria()">Guardar</button>
+    <button id="btn-descargar-consumos" class="btn btn-outline hidden" style="width:100%; margin-top:10px;" onclick="descargarConsumosMaquinaria()">📥 Descargar consumos (Excel)</button>
+    <button id="btn-guardar-maquinaria" class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="guardarMaquinaria()">Guardar</button>
     <button id="btn-eliminar-maquinaria" class="btn btn-outline hidden" style="width:100%; margin-top:10px; color:var(--red); border-color:var(--red);" onclick="eliminarMaquinaria()">🗑️ Eliminar maquinaria</button>
     <button class="btn btn-ghost" style="width:100%; margin-top:10px;" onclick="cerrarModalMaquinaria()">Cancelar</button>
   </div>
