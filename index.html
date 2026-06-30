@@ -288,10 +288,13 @@
 
   <div class="tab-content" id="content-proveedor">
     <div class="list-container">
-      <div class="list-header"><h2>⛽ Proveedor</h2><p>Captura diaria de suministro de combustible. Disponible próximamente.</p></div>
-      <div style="text-align:center; padding:40px 15px; color: var(--text-muted);">
-        <p style="font-size:14px;">Esta sección estará disponible próximamente.</p>
+      <div class="list-header">
+        <h2>⛽ Proveedor</h2>
+        <input type="date" id="prov-fecha" class="field-input" onchange="loadProveedor()" />
       </div>
+      <div id="prov-reconciliacion" style="margin-bottom:12px;"></div>
+      <button id="btn-nuevo-proveedor" class="btn btn-primary hidden" onclick="abrirProveedor()" style="margin-bottom:15px; width:100%;">+ Nueva carga de proveedor</button>
+      <div id="proveedor-list" class="history-list"></div>
     </div>
   </div>
 
@@ -381,6 +384,42 @@
     <div id="edit-error" class="alert alert-error hidden"></div>
     <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="guardarEdicion()">Guardar Cambios</button>
     <button class="btn btn-ghost" style="width:100%; margin-top:10px;" onclick="cerrarModalEditar()">Cancelar</button>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Carga de Proveedor ═══ -->
+<div id="modal-proveedor" class="modal-overlay hidden" onclick="if(event.target===this) cerrarModalProveedor()">
+  <div class="modal-card">
+    <h3 id="proveedor-modal-title" style="color:var(--blue); margin-bottom:10px;">Nueva carga de proveedor</h3>
+    <input type="hidden" id="prov-doc-id" />
+    <div class="field-group"><label class="field-label">Fecha</label><input type="date" id="prov-f-fecha" class="field-input" /></div>
+    <div class="field-group">
+      <label class="field-label">Tipo de combustible</label>
+      <select id="prov-f-tipo" class="field-input">
+        <option value="Magna">Magna</option>
+        <option value="Premium">Premium</option>
+        <option value="Diésel">Diésel</option>
+      </select>
+    </div>
+    <div class="field-group"><label class="field-label">Litros suministrados</label><input type="number" id="prov-f-litros" class="field-input" placeholder="Ej. 1500" /></div>
+    <div class="field-group"><label class="field-label">Precio por litro</label><input type="number" id="prov-f-precio" class="field-input" placeholder="Ej. 24.50" step="0.01" /></div>
+    <div id="btn-cam-prov" style="display:flex; gap:8px;">
+      <button class="btn btn-outline" style="flex:1;" onclick="document.getElementById('file-prov').click()">📷 Tomar Foto</button>
+      <button class="btn btn-outline" style="flex:1;" onclick="document.getElementById('file-prov-gal').click()">🖼️ Subir de galería</button>
+    </div>
+    <input type="file" id="file-prov" accept="image/*" capture="environment" style="display:none" onchange="previewProveedorFoto(event)" />
+    <input type="file" id="file-prov-gal" accept="image/*" style="display:none" onchange="previewProveedorFoto(event)" />
+    <div id="prov-preview-box" class="hidden" style="margin-top:15px; text-align:center;">
+      <img id="prov-img-ticket" style="max-width:100%; border-radius:8px;" />
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="document.getElementById('file-prov').click()">Repetir</button>
+      </div>
+    </div>
+    <div id="prov-ok-ticket" class="alert alert-success hidden" style="margin-top:10px;">✅ Foto de ticket confirmada</div>
+    <div id="proveedor-error" class="alert alert-error hidden" style="margin-top:10px;"></div>
+    <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="guardarProveedor()">Guardar</button>
+    <button id="btn-eliminar-proveedor" class="btn btn-outline hidden" style="width:100%; margin-top:10px; color:var(--red); border-color:var(--red);" onclick="eliminarProveedor()">🗑️ Eliminar carga</button>
+    <button class="btn btn-ghost" style="width:100%; margin-top:10px;" onclick="cerrarModalProveedor()">Cancelar</button>
   </div>
 </div>
 
