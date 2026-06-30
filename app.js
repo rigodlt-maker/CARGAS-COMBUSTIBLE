@@ -156,7 +156,7 @@ window.addEventListener("offline", () => actualizarBannerConexion());
 async function loadFirebase() {
   const { initializeApp, deleteApp } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js");
   const { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js");
-  const { getFirestore, collection, addDoc, getDocs, getDoc, query, where, orderBy, Timestamp, limit, doc, updateDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+  const { getFirestore, collection, addDoc, getDocs, getDoc, query, where, orderBy, Timestamp, limit, doc, updateDoc, setDoc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
   const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-functions.js");
 
   const firebaseConfig = {
@@ -186,6 +186,7 @@ async function loadFirebase() {
   window.fbDoc        = doc;
   window.fbUpdateDoc  = updateDoc;
   window.fbSetDoc     = setDoc;
+  window.fbDeleteDoc  = deleteDoc;
 
   // --- Funciones invocables (Cloud Functions con Admin SDK) ---
   // Se usan para operaciones que el SDK de cliente NO puede hacer sobre
@@ -1170,7 +1171,7 @@ async function loadHistory() {
   }
 }
 
-/* --- USUARIOS Y ROLES (solo Admin Maestro) --- */
+/* --- USUARIOS Y ROLES (Master, Admin, Coordinador según roles.js) --- */
 async function loadUsuarios() {
   const list = document.getElementById("usuarios-list");
   list.innerHTML = "Cargando usuarios...";
@@ -1179,24 +1180,37 @@ async function loadUsuarios() {
     window._usuariosCache = {};
     if (snap.empty) { list.innerHTML = "<p>No hay usuarios registrados.</p>"; return; }
 
-    const rolLabels = { master: "🔑 Admin Maestro", admin: "🛡️ Admin General", capturista: "👷 Capturista", operador: "👷 Capturista" };
+    let todos = [];
+    snap.forEach(docSnap => {
+      const d = { ...docSnap.data(), _id: docSnap.id };
+      window._usuariosCache[docSnap.id] = d;
+      todos.push(d);
+    });
+
+    // Filtrado según rango del usuario que está viendo la lista (roles.js).
+    const visibles = Roles.filtraUsuariosVisibles(currentRol, todos);
+
+    // Botón "+ Nuevo usuario" solo si el rol puede crear (Master/Admin).
+    document.getElementById("btn-nuevo-usuario")?.classList.toggle("hidden", !Roles.puedeCrearUsuarios(currentRol));
+
+    if (visibles.length === 0) { list.innerHTML = "<p>No hay usuarios para mostrar.</p>"; return; }
 
     list.innerHTML = "";
-    snap.forEach(docSnap => {
-      const d = docSnap.data();
-      window._usuariosCache[docSnap.id] = d;
+    visibles.forEach(d => {
       const activo = d.activo !== false;
-      
-      // Limpiar correo falso en lista para que se vea solo el alias
+      const pendienteValidacion = d.activo !== false && d.validado === false;
+
       let displayAlias = d.email || "";
-      if (displayAlias.endsWith("@grupoindi.com")) {
-        displayAlias = displayAlias.replace("@grupoindi.com", "");
-      }
+      if (displayAlias.endsWith("@grupoindi.com")) displayAlias = displayAlias.replace("@grupoindi.com", "");
+
+      const etiquetaRol = Roles.ETIQUETAS_ROL[d.rol] || d.rol;
+      const estadoTxt = !activo ? "⛔ Inactivo" : (pendienteValidacion ? "🟡 Pendiente de validar" : "✅ Activo");
+      const estadoColor = !activo ? "var(--red)" : (pendienteValidacion ? "#d4a017" : "var(--green)");
 
       list.innerHTML += `
-        <div class="history-card" style="cursor:pointer;" onclick="abrirUsuario('${docSnap.id}')">
-          <div class="hc-header"><span>${d.nombre || displayAlias}</span><span style="color:${activo ? 'var(--green)' : 'var(--red)'};">${activo ? '✅ Activo' : '⛔ Inactivo'}</span></div>
-          <p style="color:var(--text-muted); font-size:12px; margin-top:5px;">Alias: ${displayAlias} • ${rolLabels[d.rol] || "👷 Capturista"}</p>
+        <div class="history-card" style="cursor:pointer;" onclick="abrirUsuario('${d._id}')">
+          <div class="hc-header"><span>${d.nombre || displayAlias}</span><span style="color:${estadoColor};">${estadoTxt}</span></div>
+          <p style="color:var(--text-muted); font-size:12px; margin-top:5px;">Alias: ${displayAlias} • ${etiquetaRol}</p>
         </div>
       `;
     });
@@ -1206,24 +1220,47 @@ async function loadUsuarios() {
   }
 }
 
+// Opciones de rol disponibles para el usuario actual: nunca puede asignar
+// un rango mayor o igual al suyo (excepto Master, que puede todo).
+function opcionesRolDisponibles() {
+  const miRango = Roles.RANGO[currentRol] || 0;
+  return Object.values(Roles.ROLES).filter(r => {
+    if (currentRol === Roles.ROLES.MASTER) return true;
+    return Roles.RANGO[r] < miRango;
+  });
+}
+
 function abrirUsuario(docId) {
   document.getElementById("usuario-error").classList.add("hidden");
   const u = docId ? window._usuariosCache?.[docId] : null;
 
   document.getElementById("usuario-modal-title").textContent = docId ? "Editar usuario" : "Nuevo usuario";
   document.getElementById("usuario-doc-id").value = docId || "";
-  
-  // Limpiar el @grupoindi.com del input si ya existe un usuario
+
   let displayUser = u?.email || "";
-  if (displayUser.endsWith("@grupoindi.com")) {
-    displayUser = displayUser.replace("@grupoindi.com", "");
-  }
+  if (displayUser.endsWith("@grupoindi.com")) displayUser = displayUser.replace("@grupoindi.com", "");
 
   document.getElementById("usuario-email").value = displayUser;
-  document.getElementById("usuario-email").disabled = !!docId; // No dejar cambiar el alias de un usuario ya creado
+  document.getElementById("usuario-email").disabled = !!docId; // el alias no se puede cambiar una vez creado
   document.getElementById("usuario-nombre").value = u?.nombre || "";
-  document.getElementById("usuario-rol").value = u?.rol || "capturista";
   document.getElementById("usuario-activo").checked = u ? (u.activo !== false) : true;
+
+  // Select de rol: solo se muestran rangos que el usuario actual puede asignar.
+  const selectRol = document.getElementById("usuario-rol");
+  selectRol.innerHTML = opcionesRolDisponibles()
+    .map(r => `<option value="${r}">${Roles.ETIQUETAS_ROL[r]}</option>`).join("");
+  selectRol.value = u?.rol || Roles.ROLES.RESIDENTE;
+  // Si estoy editando un usuario de rango mayor al que yo puedo asignar (no debería listarse, pero por seguridad)
+  if (u && !selectRol.value) selectRol.value = u.rol;
+
+  // Contraseña directa: solo aplica al CREAR (punto 2.1). Al editar no se toca aquí.
+  const pwGroup = document.getElementById("usuario-password-group");
+  pwGroup.classList.toggle("hidden", !!docId);
+  document.getElementById("usuario-password").value = "";
+
+  // Restablecer contraseña rápido y Eliminar: solo Master, y solo editando un usuario existente.
+  document.getElementById("btn-reset-password").classList.toggle("hidden", !(docId && Roles.puedeCambiarContrasenas(currentRol)));
+  document.getElementById("btn-eliminar-usuario").classList.toggle("hidden", !(docId && Roles.puedeEliminarUsuarios(currentRol)));
 
   document.getElementById("modal-usuario").classList.remove("hidden");
   navPush("modal-usuario");
@@ -1243,19 +1280,31 @@ async function guardarUsuario() {
   const nombre = document.getElementById("usuario-nombre").value.trim();
   const rol = document.getElementById("usuario-rol").value;
   const activo = document.getElementById("usuario-activo").checked;
+  const password = document.getElementById("usuario-password").value;
 
   if (!usernameInput) { errBox.textContent = "Ingresa un alias / usuario."; errBox.classList.remove("hidden"); return; }
   if (!nombre) { errBox.textContent = "Ingresa el nombre del usuario."; errBox.classList.remove("hidden"); return; }
+  if (!docId && (!password || password.length < 6)) {
+    errBox.textContent = "Asigna una contraseña de al menos 6 caracteres.";
+    errBox.classList.remove("hidden");
+    return;
+  }
 
-  // Aquí creamos el correo falso que va a parar a la Base de Datos
   const fakeEmail = usernameInput.includes("@") ? usernameInput : `${usernameInput}@grupoindi.com`;
 
   showLoading("Guardando usuario...");
   try {
     if (docId) {
+      // Editar usuario existente: no se toca el campo "validado" aquí.
       await window.fbUpdateDoc(window.fbDoc(window.firebaseDB, "whitelist", docId), { nombre, rol, activo });
     } else {
-      await window.fbSetDoc(window.fbDoc(window.firebaseDB, "whitelist", fakeEmail), { email: fakeEmail, nombre, rol, activo });
+      // Crear usuario nuevo con contraseña directa (punto 2.1).
+      await window.fbCrearUsuarioConPassword(fakeEmail, password);
+      // Si lo crea un Admin (no Master), queda pendiente de validación (punto 2).
+      const validado = currentRol === Roles.ROLES.MASTER;
+      await window.fbSetDoc(window.fbDoc(window.firebaseDB, "whitelist", fakeEmail), {
+        email: fakeEmail, nombre, rol, activo, validado,
+      });
     }
     hideLoading();
     cerrarModalUsuario();
@@ -1264,6 +1313,49 @@ async function guardarUsuario() {
     hideLoading();
     errBox.textContent = "Error: " + e.message;
     errBox.classList.remove("hidden");
+  }
+}
+
+// Restablecer contraseña rápido (solo Master) — vía Cloud Function, no
+// requiere conocer la contraseña anterior ni desloguea a quien lo ejecuta.
+async function resetPasswordUsuario() {
+  if (!Roles.puedeCambiarContrasenas(currentRol)) return;
+  const docId = document.getElementById("usuario-doc-id").value;
+  const u = window._usuariosCache?.[docId];
+  if (!u) return;
+
+  const nuevaPw = prompt(`Nueva contraseña para ${u.nombre || u.email} (mínimo 6 caracteres):`);
+  if (!nuevaPw) return;
+  if (nuevaPw.length < 6) { alert("La contraseña debe tener al menos 6 caracteres."); return; }
+
+  showLoading("Restableciendo contraseña...");
+  try {
+    await window.fbResetUserPassword({ email: u.email, newPassword: nuevaPw });
+    hideLoading();
+    alert("Contraseña actualizada.");
+  } catch (e) {
+    hideLoading();
+    alert("Error al restablecer contraseña: " + e.message);
+  }
+}
+
+// Eliminar usuario (solo Master).
+async function eliminarUsuario() {
+  if (!Roles.puedeEliminarUsuarios(currentRol)) return;
+  const docId = document.getElementById("usuario-doc-id").value;
+  const u = window._usuariosCache?.[docId];
+  if (!u) return;
+  if (!confirm(`¿Eliminar al usuario ${u.nombre || u.email}? Esta acción no se puede deshacer.`)) return;
+
+  showLoading("Eliminando usuario...");
+  try {
+    await window.fbDeleteDoc(window.fbDoc(window.firebaseDB, "whitelist", docId));
+    hideLoading();
+    cerrarModalUsuario();
+    loadUsuarios();
+  } catch (e) {
+    hideLoading();
+    alert("Error al eliminar usuario: " + e.message);
   }
 }
 
