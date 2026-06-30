@@ -707,9 +707,10 @@ async function getRendimiento(ecoActual, horoRawActual, litrosActuales, excludeD
     return "Primer Registro";
   } catch (e) {
     // FIX: antes este error se tragaba en silencio devolviendo "N/A".
-    // Ahora lo dejamos en consola para poder diagnosticar (p. ej. reglas
-    // de Firestore, índice faltante, etc.) en vez de un "N/A" sin pistas.
+    // Ahora lo dejamos en consola Y en alert (temporal, para diagnóstico)
+    // porque en celular casi nadie revisa la consola del navegador.
     console.error("getRendimiento error:", e);
+    alert("⚠️ DIAGNÓSTICO RENDIMIENTO — Firestore devolvió un error al buscar el registro anterior:\n\n" + (e.code || "") + " " + e.message + "\n\nPor eso se está mostrando N/A. Avisa a soporte con este mensaje exacto.");
     return "N/A";
   }
 }
