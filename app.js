@@ -2,6 +2,16 @@
 // app.js — FuelControl PWA (Actualizado con Login por Alias)
 // =============================================
 
+// NOTA IMPORTANTE: este es el único archivo que index.html realmente carga
+// (<script type="module" src="app.js">). Los archivos auth.js, nav.js,
+// cargas.js, historial.js, offline.js, pdf.js y state.js son una
+// reescritura modular que quedó huérfana — index.html nunca los importa.
+// roles.js SÍ se reutiliza aquí porque ya implementa correctamente la
+// matriz de 5 roles. El resto de la migración a módulos separados se hará
+// en un paso posterior, sin riesgo, una vez esté estable la app.
+
+import * as Roles from "./roles.js";
+
 /* --- REGISTRO DEL SERVICE WORKER (requisito para poder "Instalar app") --- */
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -144,9 +154,10 @@ window.addEventListener("online",  () => { actualizarBannerConexion(); sincroniz
 window.addEventListener("offline", () => actualizarBannerConexion());
 
 async function loadFirebase() {
-  const { initializeApp }    = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js");
-  const { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js");
+  const { initializeApp, deleteApp } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js");
+  const { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js");
   const { getFirestore, collection, addDoc, getDocs, getDoc, query, where, orderBy, Timestamp, limit, doc, updateDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+  const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-functions.js");
 
   const firebaseConfig = {
     apiKey:            "AIzaSyCeIsd_BrHKbAY1HrYb3HL4vG4cpadUTuU",
@@ -176,14 +187,39 @@ async function loadFirebase() {
   window.fbUpdateDoc  = updateDoc;
   window.fbSetDoc     = setDoc;
 
+  // --- Funciones invocables (Cloud Functions con Admin SDK) ---
+  // Se usan para operaciones que el SDK de cliente NO puede hacer sobre
+  // OTRO usuario (resetear contraseña de alguien más) sin desloguear a
+  // quien la está ejecutando. Requiere desplegar functions/index.js
+  // (ver función "resetUserPassword" agregada ahí).
+  const functions = getFunctions(app);
+  window.fbResetUserPassword = httpsCallable(functions, "resetUserPassword");
+
+  // --- Crear usuario nuevo asignándole contraseña directamente (punto 2.1) ---
+  // Truco estándar de Firebase: se crea una SEGUNDA app/instancia de Auth
+  // SOLO para dar de alta al nuevo usuario, así NO se cierra la sesión de
+  // quien está creando el usuario (Admin/Master) en la app principal.
+  window.fbCrearUsuarioConPassword = async (email, password) => {
+    const secondaryApp = initializeApp(firebaseConfig, "secondary-" + Date.now());
+    const secondaryAuth = getAuth(secondaryApp);
+    try {
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      return cred.user.uid;
+    } finally {
+      await signOut(secondaryAuth).catch(() => {});
+      await deleteApp(secondaryApp).catch(() => {});
+    }
+  };
+
   initAuth();
 }
 
 /* --- VARIABLES GLOBALES --- */
 let currentUser = null;
 let currentStep = 1;
-let isAdmin = false;
-let isMaster = false;
+let isAdmin = false;   // true si el rol puede editar registros NO conciliados (Coordinador/Admin/Master)
+let isMaster = false;  // true solo si el rol puede conciliar y editar YA conciliado (Master)
+let currentRol = null; // 'master' | 'admin' | 'coordinador' | 'residente' | 'visor'
 
 let dataFotos = { ini: null, fin: null, ticket: null, pend: null, horo: null };
 let estadoFotos = { ini: false, fin: false, ticket: false, pend: false, horo: false };
@@ -268,35 +304,57 @@ function autoCompletarEquipoEdit() {
 }
 
 /* --- AUTH Y ROLES --- */
+// Compatibilidad: si en Firestore quedó algún usuario con el rol viejo
+// ("capturista" / "operador"), lo tratamos como "residente".
+function normalizarRol(rolCrudo) {
+  if (rolCrudo === "capturista" || rolCrudo === "operador") return Roles.ROLES.RESIDENTE;
+  if (Object.values(Roles.ROLES).includes(rolCrudo)) return rolCrudo;
+  return Roles.ROLES.RESIDENTE;
+}
+
 function initAuth() {
   window.fbAuthChanged(window.firebaseAuth, async (user) => {
     if (user) {
       const authData = await checkWhitelist(user.email);
       if (!authData.allowed) {
-        showLoginError("Usuario no autorizado o inactivo.");
+        showLoginError(authData.pendiente
+          ? "Tu usuario fue creado pero está pendiente de validación del Master."
+          : "Usuario no autorizado o inactivo.");
         await window.fbSignOut(window.firebaseAuth);
         return;
       }
       currentUser = user;
-      
+      currentRol  = authData.rol;
+
       // Mostrar solo el alias en la barra superior
       let displayUser = user.email;
       if(displayUser.endsWith("@grupoindi.com")) {
         displayUser = displayUser.replace("@grupoindi.com", "");
       }
-      document.getElementById("header-user").textContent = displayUser;
+      document.getElementById("header-user").textContent =
+        `${displayUser} · ${Roles.ETIQUETAS_ROL[currentRol] || currentRol}`;
 
-      isAdmin = (authData.rol === 'admin' || authData.rol === 'master');
-      isMaster = (authData.rol === 'master');
-      if (isAdmin) document.getElementById("tab-pendientes").classList.remove("hidden");
-      if (isMaster) document.getElementById("tab-usuarios").classList.remove("hidden");
+      // Gates generales reutilizados en el resto del código (historial/conciliación)
+      isAdmin  = Roles.puedeEditarNoConciliado(currentRol);
+      isMaster = Roles.puedeConciliar(currentRol);
+
+      // Mostrar/ocultar TODAS las pestañas según la matriz central de roles.js,
+      // en vez de ir prendiendo una por una como antes.
+      const visibles = Roles.tabsVisibles(currentRol);
+      ["cargas","pendientes","historial","usuarios","proveedor","maquinaria","graficos","resumen"]
+        .forEach(tab => {
+          document.getElementById(`tab-${tab}`)?.classList.toggle("hidden", !visibles.includes(tab));
+        });
+
+      // Pestaña inicial: la primera que el rol tenga permitida.
+      switchTab(visibles[0] || "cargas");
 
       showScreen("app");
       // Intentar sincronizar registros offline que quedaron pendientes
       actualizarBannerConexion();
       setTimeout(sincronizarCola, 1500); // pequeño delay para que Firebase esté listo
     } else {
-      currentUser = null; showScreen("login");
+      currentUser = null; currentRol = null; showScreen("login");
     }
   });
 }
@@ -308,8 +366,12 @@ async function checkWhitelist(email) {
     const snap = await window.fbGetDocs(q);
     if (snap.empty) return { allowed: false };
     const data = snap.docs[0].data();
-    if (data.activo === false) return { allowed: false };
-    return { allowed: true, rol: data.rol || 'capturista' };
+    const rol = normalizarRol(data.rol);
+    const usuario = { activo: data.activo, validado: data.validado, rol };
+    if (!Roles.usuarioPuedeOperar(usuario)) {
+      return { allowed: false, pendiente: data.activo !== false && data.validado === false };
+    }
+    return { allowed: true, rol };
   } catch (e) { return { allowed: false }; }
 }
 
@@ -341,11 +403,11 @@ function switchTab(name, desdePopstate = false) {
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.id === `tab-${name}`));
   document.querySelectorAll(".tab-content").forEach(c => c.classList.toggle("active", c.id === `content-${name}`));
   if (name === "historial") loadHistory();
-  if (name === "pendientes" && isAdmin) loadPendientes();
-  if (name === "usuarios" && isMaster) loadUsuarios();
-  // Solo empujamos historial si NO venimos de Registro→Registro (evita
+  if (name === "pendientes") loadPendientes();
+  if (name === "usuarios" && Roles.puedeVerPanelUsuarios(currentRol)) loadUsuarios();
+  // Solo empujamos historial si NO venimos de Cargas→Cargas (evita
   // entradas duplicadas) y si el cambio fue un click real, no un popstate.
-  if (!desdePopstate && name !== "registro") navPush(`tab-${name}`);
+  if (!desdePopstate && name !== "cargas") navPush(`tab-${name}`);
 }
 
 /* ─────────────────────────────────────────────────────────────────
