@@ -445,16 +445,16 @@ window.addEventListener("popstate", (e) => {
   }
 
   // ¿Estamos en el formulario de Registro y no es el paso 1? Retrocede un paso.
-  const enRegistro = document.getElementById("content-registro")?.classList.contains("active");
+  const enRegistro = document.getElementById("content-cargas")?.classList.contains("active");
   if (enRegistro && currentStep > 1) {
     goStep(currentStep - 1, /*desdePopstate*/ true);
     return;
   }
 
-  // ¿Estamos en otra pestaña que no sea Registro? Vuelve a Registro.
+  // ¿Estamos en otra pestaña que no sea Cargas? Vuelve a Cargas.
   const tabActiva = document.querySelector(".tab-btn.active")?.id;
-  if (tabActiva && tabActiva !== "tab-registro") {
-    switchTab("registro", true);
+  if (tabActiva && tabActiva !== "tab-cargas") {
+    switchTab("cargas", true);
     return;
   }
 
@@ -1643,6 +1643,8 @@ window.conciliarRegistro = conciliarRegistro;
 window.abrirUsuario = abrirUsuario;
 window.cerrarModalUsuario = cerrarModalUsuario;
 window.guardarUsuario = guardarUsuario;
+window.resetPasswordUsuario = resetPasswordUsuario;
+window.eliminarUsuario = eliminarUsuario;
 window.forceDownloadPDF = forceDownloadPDF;
 window.descargarPDFDesdeCache = descargarPDFDesdeCache;
 window.loadPendientes = loadPendientes;
