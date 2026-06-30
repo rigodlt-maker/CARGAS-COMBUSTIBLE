@@ -1,227 +1,107 @@
-# FuelControl PWA — Guía de Implementación
+# FuelControl PWA — Control de Combustible y Maquinaria
 ## Rompeolas Oriente · ASPN-GI-CO-62601-016-25
+
+> Este documento reemplaza al `readme.md` anterior (describía una versión
+> sin roles ni maquinaria, ya obsoleta). Refleja el estado real del
+> repositorio al **30-jun-2026**.
 
 ---
 
-## 📁 Estructura de archivos (real, tal como está en este repo)
+## 📁 Estructura de archivos
 
 ```
 CARGAS-COMBUSTIBLE-main/
-├── index.html      ← App principal (PWA shell)
-├── style.css       ← Estilos (paleta oscura industrial)
-├── app.js          ← Lógica de formulario, cámara, Firestore Y CONFIG DE FIREBASE
-├── index.js        ← Cloud Function (consolidación de PDFs) — pertenece a functions/index.js
-├── manifest.json   ← PWA manifest
-├── service-worker.js ← Cache offline
+├── index.html        ← Shell de la PWA, todas las pantallas/tabs
+├── app.js             ← Núcleo: Firebase config, Maquinaria, Permisos,
+│                         Andon, Resumen, Dashboard, PDFs (jsPDF)
+├── auth.js            ← Login / logout / sesión
+├── cargas.js           ← Flujo de captura "Cargas" (4 pasos)
+├── historial.js        ← Historial, conciliación, edición
+├── nav.js              ← Navegación entre tabs / modales (back button)
+├── offline.js          ← Cola de sincronización sin internet
+├── pdf.js               ← Helpers de generación de PDF (jsPDF)
+├── roles.js             ← ÚNICA fuente de verdad de permisos por rol
+├── state.js              ← Estado global de la app (usuario, rol, cache)
+├── service-worker.js      ← Cache offline (PWA)
+├── manifest.json           ← PWA manifest
 ├── icon-192.png / icon-512.png
 └── readme.md
+
+Fuera del repo (los manejas en Firebase Console / CLI):
+├── firestore.rules        ← Reglas de Firestore (ver firestore_rules.txt)
+└── storage.rules            ← Reglas de Storage (ver firebase_storage.txt)
 ```
 
-> ⚠️ NOTA: a diferencia de versiones anteriores de esta guía, **no existe
-> un archivo `firebase-config.js` separado**. La configuración de Firebase
-> (`apiKey`, `projectId`, etc.) está embebida directamente dentro de
-> `app.js`, en la función `loadFirebase()`. Si vas a desplegar este
-> proyecto en OTRO proyecto de Firebase (no el actual), edita esos
-> valores directamente ahí.
->
-> También, `index.js` en este repo NO va en la raíz del hosting — es el
-> código de la Cloud Function y debe colocarse dentro de una carpeta
-> `functions/` al hacer `firebase init functions` (ver Paso 5).
+> ⚠️ La configuración de Firebase (`apiKey`, `projectId`, etc.) sigue
+> embebida en `app.js`. Las Cloud Functions van en `functions/index.js`
+> (el `index.js` de la raíz del repo es ese código, pero debe copiarse
+> dentro de la carpeta `functions/` al hacer `firebase init functions`).
 
 ---
 
-## 🔧 Paso 1: Crear proyecto Firebase
+## ✅ Estado de funcionalidades (vs. requerimientos originales)
 
-1. Ir a [console.firebase.google.com](https://console.firebase.google.com)
-2. Crear proyecto: `fuelcontrol-rompeolas`
-3. Habilitar servicios:
-   - **Authentication** → Email/Contraseña
-   - **Firestore** → Modo producción
-   - **Storage** → Modo producción
-   - **Functions** → Plan Blaze (necesario para Cloud Functions)
+| # | Funcionalidad | Estado |
+|---|---|---|
+| 1 | Rol **Master**: control total, edita historial conciliado, panel de Usuarios, reset de contraseña server-side | ✅ Hecho |
+| 2 | Rol **Admin**: historial sin editar conciliado, crea usuarios (quedan pendientes de validar por Master), no asigna rango mayor al suyo | ✅ Hecho |
+| 2.1 | Contraseña asignable al crear usuario | ✅ Hecho |
+| 2.2 | Pestaña "Registro" → renombrada **"Cargas"** | ✅ Hecho |
+| 3 | Rol **Residente**: solo Cargas, Pendientes, Proveedor (oculto por flag), Maquinaria | ✅ Hecho |
+| 4 | Rol **Coordinador**: Cargas, Historial (edita y descarga PDF, no concilia), Usuarios sin ver Master ni crear/cambiar roles | ✅ Hecho |
+| 4.1 | Pestaña **Proveedor** (litros, tipo de combustible, precio, foto, slicer de fecha) | ✅ Hecho |
+| 5 | Rol **Visor**: solo Gráficos, Maquinaria, Resumen; descarga PDF de Resumen | ✅ Hecho |
+| 5.1 | Pestaña "Exportar" eliminada → reemplazada por **Resumen** | ✅ Hecho |
+| 6 | **Resumen**: sección Rendimientos (slicers fecha/zona, gráfico por zona o por máquina) + sección Equipos (conteo por tipo, Propia/Rentada) | ✅ Hecho |
+| 7 | Panel **Maquinaria**: filtros (eco, banco, proveedor, activa/inactiva), descarga de consumos por máquina en Excel, alta/edición restringida a Coordinador/Admin/Master | ✅ Hecho |
+| 7.1 | Alta de maquinaria con catálogo (tipo/marca/modelo + "Otro"), zonas/subzonas, checklist de 5 documentos | ✅ Hecho |
+| 7.2 | Subida de PDFs de documentos (Permiso, Factura, DC3, Tarjeta de circulación, Póliza) + pestaña **Permisos** con leyenda "Sin permiso" | ✅ Hecho (estaba marcado como pendiente en la nota anterior — ya está implementado) |
+| 7 (zonas) | Historial de zonas append-only, consumo no se traslada entre zonas | ✅ Hecho |
+| 8 | Dashboard con KPIs (Bajo/Medio/Alto), slicers, gráficos por zona/subzona, tabla tipo/cantidad/marcas/consumo promedio | ✅ Hecho |
+| 9 | Alertas **Andon**: capacidad de tanque y consumo estimado por horómetro, con leyenda impresa en el PDF de la carga | ✅ Hecho |
 
----
-
-## 🔑 Paso 2: Configurar la conexión a Firebase
-
-Editar directamente el objeto `firebaseConfig` dentro de **`app.js`**
-(función `loadFirebase()`, cerca de la línea 151):
-
-```js
-const firebaseConfig = {
-  apiKey:            "AIza...",
-  authDomain:        "fuelcontrol-rompeolas.firebaseapp.com",
-  projectId:         "fuelcontrol-rompeolas",
-  storageBucket:     "fuelcontrol-rompeolas.appspot.com",
-  messagingSenderId: "123456789",
-  appId:             "1:123...:web:abc..."
-};
-```
-
-> 🔒 Nota de seguridad: estas credenciales de Firebase son públicas por
-> diseño (cualquier app web las expone en el navegador). Lo que
-> realmente protege tus datos son las **reglas de seguridad de
-> Firestore/Storage** (ver Paso 4) y la whitelist de usuarios — no el
-> ocultar este objeto.
+**Conclusión:** el repositorio que subiste hoy ya cubre los 9 puntos de tu
+brief original. No se encontraron bugs activos, TODOs ni código muerto
+en la revisión de `app.js`, `roles.js`, `cargas.js`, `historial.js`,
+`index.js` (Cloud Functions) ni en las reglas de Firestore/Storage.
 
 ---
 
-## 👥 Paso 3: Whitelist de usuarios
+## 🔴 Pendiente / a decidir contigo
 
-En **Firestore Console**, crear colección `whitelist`:
+Nada bloqueante. Posibles siguientes pasos, según prioricemos:
 
-| Documento ID       | Campo  | Valor                   |
-|--------------------|--------|-------------------------|
-| operador1@obra.com | email  | operador1@obra.com      |
-|                    | nombre | Juan Pérez              |
-|                    | activo | true                    |
-
-Para crear usuario → **Authentication** → **Agregar usuario** → email + contraseña.
-
----
-
-## 🛡 Paso 4: Reglas de seguridad
-
-### Firestore (`firestore.rules`):
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /registros/{docId} {
-      allow read, write: if request.auth != null &&
-        exists(/databases/$(database)/documents/whitelist/$(request.auth.token.email));
-    }
-    match /whitelist/{email} {
-      allow read: if request.auth != null;
-      allow write: if false;
-    }
-  }
-}
-```
-
-### Storage (`storage.rules`):
-```
-rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /{fecha}/{eco}/{allPaths=**} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}
-```
+1. **Confirmar despliegue real**: ¿ya hiciste `firebase deploy --only functions`
+   con el `resetUserPassword` nuevo? Si la función vieja `consolidarPDFsECO`
+   seguía desplegada, este deploy la elimina sola.
+2. **`RESIDENTE_VE_PROVEEDOR`** está en `false` en `roles.js` (línea ~24):
+   el código ya soporta activarlo, solo falta tu decisión de negocio.
+3. Revisar si quieres ajustar el `ANDON_TOLERANCIA` (actualmente 15% de
+   margen antes de disparar la alerta de sobreconsumo estimado).
+4. Pulido de UX / pruebas de campo (esto ya no es código, es validación
+   con los operadores reales).
 
 ---
 
-## ☁️ Paso 5: Deploy Cloud Functions (consolidación PDFs)
+## 🔧 Resumen rápido de configuración (Firebase)
 
-```bash
-# Instalar Firebase CLI
-npm install -g firebase-tools
-
-# Login
-firebase login
-
-# Inicializar (en la carpeta del proyecto)
-firebase init functions
-# Elegir: JavaScript, No ESLint
-# Esto crea una carpeta functions/ con su propio index.js de plantilla.
-
-# IMPORTANTE: reemplaza ese functions/index.js de plantilla por el
-# index.js que viene en este repo (es el código real de la Cloud Function).
-
-# Instalar dependencias
-cd functions
-npm install pdf-lib firebase-admin firebase-functions
-
-# Deploy
-cd ..
-firebase deploy --only functions
-```
-
----
-
-## 🌐 Paso 6: Hosting (recomendado)
-
-```bash
-firebase init hosting
-# Public directory: . (raíz)
-# Configure as SPA: No
-# Overwrite index.html: No
-
-firebase deploy --only hosting
-```
-
-URL resultante: `https://fuelcontrol-rompeolas.web.app`
-
----
-
-## 📱 Instalar como PWA en dispositivo
-
-1. Abrir la URL en **Chrome** (Android) o **Safari** (iOS)
-2. Android: Menú → "Agregar a pantalla de inicio"
-3. iOS: Compartir → "Agregar a pantalla de inicio"
-
----
-
-## 🗂 Estructura de datos en Storage
-
-```
-Storage/
-└── YYYY-MM-DD/
-    └── ECO-042/
-        ├── ticket_TK-00847_1718123456.pdf   ← PDF individual
-        ├── ticket_TK-00848_1718124000.pdf
-        └── CONSOLIDADO_ECO-042_2025-01-15.pdf  ← Auto-generado por Cloud Function
-```
-
----
-
-## 📊 Estructura de Firestore
-
-### Colección: `registros`
-```json
-{
-  "fecha":          "2025-01-15",
-  "eco":            "ECO-042",
-  "maquinaria":     "Excavadora CAT 336",
-  "ticket":         "TK-00847",
-  "tipo":           "Diésel",
-  "litros":         350.5,
-  "cuentaInicial":  0,
-  "cuentaFinal":    350.5,
-  "horometro":      "3421.6",
-  "sinHorometro":   false,
-  "pdfUrl":         "https://storage.googleapis.com/...",
-  "pdfPath":        "2025-01-15/ECO-042/ticket_TK-00847_...",
-  "consolidatedPdfUrl": "https://...",
-  "usuario":        "operador@obra.com",
-  "creadoEn":       "Timestamp"
-}
-```
-
----
-
-## ⚡ Lógica del horómetro
-
-El campo acepta formato `XXXX.N` donde el último dígito representa fracción de hora:
-- `3421.6` → 3421 horas + (6 × 6 min) = 3421h 36min
-- El badge muestra la conversión en tiempo real
-
----
-
-## 🔄 Flujo de consolidación PDF
-
-1. Operador llena formulario → guarda registro + PDF individual en Storage
-2. Cloud Function `consolidarPDFsECO` se dispara automáticamente
-3. Busca todos los tickets del mismo ECO + fecha
-4. Fusiona PDFs con `pdf-lib`
-5. Sube `CONSOLIDADO_ECO_FECHA.pdf` a la carpeta del ECO
-6. Actualiza todos los registros con URL del consolidado
+1. **Authentication** → Email/Contraseña habilitado.
+2. **Firestore** → colecciones `whitelist`, `registros`, `proveedor_cargas`,
+   `maquinaria` (con subcolecciones `historialZonas` y `documentos`),
+   `catalogos`. Reglas: ver `firestore_rules.txt` (control por rol vía
+   colección `whitelist`, jerarquía Master > Admin > Coordinador >
+   Residente > Visor).
+3. **Storage** → rutas `registros/{fecha}/{eco}/{archivo}.jpg`,
+   `proveedor/{fecha}/{archivo}.jpg`, `maquinaria/{eco}/documentos/{archivo}.pdf`.
+   Reglas: ver `firebase_storage.txt` (usa `firestore.get()` cross-service
+   para validar rol/activo contra la whitelist).
+4. **Functions** (Plan Blaze) → `resetUserPassword` callable, valida en
+   servidor que quien llama sea Master activo antes de tocar otra cuenta.
+5. **Hosting** (opcional) → `firebase deploy --only hosting`.
 
 ---
 
 ## 📞 Soporte
 
-Proyecto: Rompeolas Oriente — ASPN-GI-CO-62601-016-25  
-Módulo: Control de Combustibles y Rendimientos
+Proyecto: Rompeolas Oriente — ASPN-GI-CO-62601-016-25
+Módulo: Control de Combustibles, Maquinaria y Rendimientos
