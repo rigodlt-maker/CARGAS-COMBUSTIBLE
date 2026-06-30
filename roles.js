@@ -138,6 +138,16 @@ export function puedeSubirProveedor(rol) {
   return false;
 }
 
+// Editar una carga de proveedor ya capturada: mismos roles que pueden subirla.
+export function puedeEditarProveedor(rol) {
+  return puedeSubirProveedor(rol);
+}
+
+// Eliminar una carga de proveedor: solo Master (igual que en registros/whitelist).
+export function puedeEliminarProveedor(rol) {
+  return rol === ROLES.MASTER;
+}
+
 /* ───────────────────────────── MAQUINARIA ───────────────────────────── */
 
 export function puedeVerMaquinaria(rol) {
