@@ -225,45 +225,25 @@ let currentRol = null; // 'master' | 'admin' | 'coordinador' | 'residente' | 'vi
 let dataFotos = { ini: null, fin: null, ticket: null, pend: null, horo: null };
 let estadoFotos = { ini: false, fin: false, ticket: false, pend: false, horo: false };
 
-const catalogoEquipos = [
-  { "maquinaria": "CAMION ARTICULADO", "marca": "CAT", "modelo": "745", "interno": "CAT-745-001" },
-  { "maquinaria": "CAMION ARTICULADO", "marca": "SANY", "modelo": "SAT40C", "interno": "SANY-SAT40C-002" },
-  { "maquinaria": "CAMION ARTICULADO", "marca": "SANY", "modelo": "SAT40C", "interno": "SANY-SAT40C-003" },
-  { "maquinaria": "CARGADOR FRONTAL", "marca": "KOMATSU", "modelo": "WA600", "interno": "CFN-600-001" },
-  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "320ELRR", "interno": "EHO-320-E-007" },
-  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "385 BL", "interno": "EHO-385-001" },
-  { "maquinaria": "EXCAVADORA", "marca": "KOMATSU", "modelo": "PC450-LC8", "interno": "EHO-450-010" },
-  { "maquinaria": "EXCAVADORA", "marca": "KOMATSU", "modelo": "PC500 LC-10M0", "interno": "PC500 LC-013" },
-  { "maquinaria": "EXCAVADORA", "marca": "SANY", "modelo": "SY550HD", "interno": "R-EHO-550-003" },
-  { "maquinaria": "EXCAVADORA", "marca": "SANY", "modelo": "SY500H", "interno": "R-EHO-500-X" },
-  { "maquinaria": "GRÚA", "marca": "LINKBELT", "modelo": "LS138", "interno": "GDO-138-X" },
-  { "maquinaria": "MOTOCONFORMADORA", "marca": "SANY", "modelo": "SMG200C-8", "interno": "R-MOT-200-001" },
-  { "maquinaria": "MOTOCONFORMADORA", "marca": "SANY", "modelo": "SMG200C-8", "interno": "R-MOT-200-002" },
-  { "maquinaria": "RETROEXCAVADORA", "marca": "JOHN DEERE", "modelo": "310L", "interno": "RHN-310-001" },
-  { "maquinaria": "TRACTOR DE ORUGAS", "marca": "KOMATSU", "modelo": "D65EX-16", "interno": "R-TRO-D6-001" },
-  { "maquinaria": "VIBROCOMPACTADOR", "marca": "CAT", "modelo": "CS11GC", "interno": "VCM-S11-001" },
-  { "maquinaria": "CAMION ARTICULADO", "marca": "KOMATSU", "modelo": "HM400-3M0", "interno": "HM400-04" },
-  { "maquinaria": "CARGADOR FRONTAL", "marca": "CAT", "modelo": "980K", "interno": "980K-001" },
-  { "maquinaria": "CARGADOR FRONTAL", "marca": "CAT", "modelo": "980K", "interno": "980K-002" },
-  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "352", "interno": "R-EHO-352-005" },
-  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "352", "interno": "CAT-352-006" },
-  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "336", "interno": "R-EHO-336-018" },
-  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "336", "interno": "R-EHO-336-019" },
-  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "349 FL", "interno": "CAT 349FL-012" },
-  { "maquinaria": "EXCAVADORA", "marca": "CAT", "modelo": "336-E", "interno": "336E-016" },
-  { "maquinaria": "EXCAVADORA", "marca": "JCB", "modelo": "JS385LC HD", "interno": "JS385-LC-009" },
-  { "maquinaria": "EXCAVADORA", "marca": "JCB", "modelo": "JS385LC HD", "interno": "JS385-LC-011" },
-  { "maquinaria": "EXCAVADORA", "marca": "JCB", "modelo": "JS385LC HD", "interno": "JS385-LC-014" },
-  { "maquinaria": "EXCAVADORA", "marca": "JCB", "modelo": "JS385LC HD", "interno": "JS385-LC-015" },
-  { "maquinaria": "EXCAVADORA", "marca": "KOMATSU", "modelo": "500 LC", "interno": "R-EHO-500-008" },
-  { "maquinaria": "EXCAVADORA", "marca": "KOMATSU", "modelo": "PC490", "interno": "R-EHO-490-017" },
-  { "maquinaria": "TRACTOR DE ORUGAS", "marca": "CAT", "modelo": "D8", "interno": "CAT-D8-X" }
-].map(e => ({
-  maquinaria: (e.maquinaria || "").trim(),
-  marca:      (e.marca      || "").trim(),
-  modelo:     (e.modelo     || "").trim(),
-  interno:    (e.interno    || "").trim()
-}));
+// Antes esta lista venía hardcodeada a mano (31 máquinas fijas). Ahora se
+// llena dinámicamente desde la colección "maquinaria" de Firestore (ver
+// cargarCatalogoEquiposDesdeFirestore más abajo), así que cualquier máquina
+// que se agregue desde el panel de Maquinaria aparece automáticamente aquí
+// sin tener que tocar código.
+let catalogoEquipos = [];
+
+/* --- ZONAS / SUBZONAS Y CATÁLOGO BASE DE TIPOS Y MARCAS (punto 7.1) --- */
+const ZONAS_SUBZONAS = {
+  "Banco de Materiales": ["Mozomboa Gami", "Mozomboa Lerma", "Mozomboa Porfirio", "Tritura", "El Tajo", "Las Palmas"],
+  "Obra": ["Rompeolas", "Acopio Marino", "Acopio Terrestre", "Core Locs"],
+};
+const TIPOS_MAQUINARIA = [
+  "Camión articulado", "Tractor de orugas", "Excavadora", "Retroexcavadora",
+  "Vibrocompactador", "Motoconformadora", "Grúa", "Cargador frontal", "Otro",
+];
+const MARCAS_MAQUINARIA = [
+  "Komatsu", "Caterpillar", "Hyundai", "Sany", "Linkbelt", "John Deere", "JCB", "Otro",
+];
 
 /* --- INIT --- */
 cargarSelectorEquipos("f-eco");
@@ -350,6 +330,11 @@ function initAuth() {
       // Pestaña inicial: la primera que el rol tenga permitida.
       switchTab(visibles[0] || "cargas");
 
+      // Refrescar el catálogo de equipos (selects de Cargas/Editar) desde
+      // la colección real "maquinaria" de Firestore, ya con sesión iniciada
+      // (antes era una lista fija a mano en el código).
+      cargarCatalogoEquiposDesdeFirestore();
+
       showScreen("app");
       // Intentar sincronizar registros offline que quedaron pendientes
       actualizarBannerConexion();
@@ -407,6 +392,7 @@ function switchTab(name, desdePopstate = false) {
   if (name === "pendientes") loadPendientes();
   if (name === "usuarios" && Roles.puedeVerPanelUsuarios(currentRol)) loadUsuarios();
   if (name === "proveedor" && Roles.puedeVerProveedor(currentRol)) loadProveedor();
+  if (name === "maquinaria" && Roles.puedeVerMaquinaria(currentRol)) loadMaquinaria();
   // Solo empujamos historial si NO venimos de Cargas→Cargas (evita
   // entradas duplicadas) y si el cambio fue un click real, no un popstate.
   if (!desdePopstate && name !== "cargas") navPush(`tab-${name}`);
@@ -1793,6 +1779,285 @@ function descargarPDFDesdeCache(id) {
 }
 
 
+/* ───────────────────────────── MAQUINARIA (punto 7) ───────────────────────────── */
+
+// Recarga el catálogo real de equipos (usado en los selects de # ECO de
+// Cargas y Editar) desde Firestore, en vez de la lista fija que había antes.
+// Solo trae máquinas activas, igual que antes hacía la lista a mano.
+async function cargarCatalogoEquiposDesdeFirestore() {
+  try {
+    const col = window.fbCollection(window.firebaseDB, "maquinaria");
+    const snap = await window.fbGetDocs(col);
+    catalogoEquipos = [];
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      if (d.activa === false) return;
+      catalogoEquipos.push({
+        maquinaria: d.tipo || "",
+        marca: d.marca || "",
+        modelo: d.modelo || "",
+        interno: d.numInterno || d.eco || docSnap.id,
+      });
+    });
+    cargarSelectorEquipos("f-eco");
+    cargarSelectorEquipos("edit-eco");
+  } catch (e) {
+    console.error("No se pudo cargar el catálogo de maquinaria:", e);
+  }
+}
+
+function llenarSelectConOtro(selectId, opciones) {
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = opciones.map(o => `<option value="${o}">${o}</option>`).join("");
+}
+
+function toggleOtroMaquinaria(campo) {
+  const sel = document.getElementById(`maq-${campo}`);
+  const otro = document.getElementById(`maq-${campo}-otro`);
+  otro.classList.toggle("hidden", sel.value !== "Otro");
+}
+
+function poblarSubzonas(subzonaSeleccionada = "") {
+  const zona = document.getElementById("maq-zona").value;
+  const subSel = document.getElementById("maq-subzona");
+  const opciones = ZONAS_SUBZONAS[zona] || [];
+  subSel.innerHTML = opciones.map(s => `<option value="${s}">${s}</option>`).join("");
+  if (subzonaSeleccionada && opciones.includes(subzonaSeleccionada)) subSel.value = subzonaSeleccionada;
+}
+
+window._maquinariaCache = {};
+
+async function loadMaquinaria() {
+  const list = document.getElementById("maquinaria-list");
+  document.getElementById("btn-nueva-maquina")?.classList.toggle("hidden", !Roles.puedeAgregarMaquinaria(currentRol));
+  list.innerHTML = "Cargando...";
+  try {
+    const col = window.fbCollection(window.firebaseDB, "maquinaria");
+    const snap = await window.fbGetDocs(col);
+
+    const buscar = (document.getElementById("maq-f-buscar").value || "").trim().toUpperCase();
+    const fZona = document.getElementById("maq-f-zona").value;
+    const fProveedor = document.getElementById("maq-f-proveedor").value;
+    const fActiva = document.getElementById("maq-f-activa").value;
+
+    window._maquinariaCache = {};
+    const zonasSet = new Set();
+    const proveedoresSet = new Set();
+    const items = [];
+
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      window._maquinariaCache[docSnap.id] = d;
+      if (d.zona) zonasSet.add(d.zona);
+      if (d.proveedor) proveedoresSet.add(d.proveedor);
+
+      if (buscar && !`${d.eco || ""} ${d.numInterno || ""}`.toUpperCase().includes(buscar)) return;
+      if (fZona && d.zona !== fZona) return;
+      if (fProveedor && d.proveedor !== fProveedor) return;
+      if (fActiva === "activa" && d.activa !== true) return;
+      if (fActiva === "inactiva" && d.activa !== false) return;
+
+      items.push({ id: docSnap.id, ...d });
+    });
+
+    // Refrescar opciones de los selects de filtro sin perder lo seleccionado
+    const zonaActual = fZona, provActual = fProveedor;
+    document.getElementById("maq-f-zona").innerHTML =
+      `<option value="">Todas las zonas</option>` + [...zonasSet].sort().map(z => `<option value="${z}">${z}</option>`).join("");
+    document.getElementById("maq-f-zona").value = zonaActual;
+    document.getElementById("maq-f-proveedor").innerHTML =
+      `<option value="">Todos los proveedores</option>` + [...proveedoresSet].sort().map(p => `<option value="${p}">${p}</option>`).join("");
+    document.getElementById("maq-f-proveedor").value = provActual;
+
+    if (!items.length) { list.innerHTML = "<p>No hay maquinaria que coincida con el filtro.</p>"; return; }
+
+    const puedeEditar = Roles.puedeEditarMaquinaria(currentRol);
+    list.innerHTML = "";
+    items.sort((a, b) => (a.eco || "").localeCompare(b.eco || "")).forEach(d => {
+      const docsOk = d.documentos ? Object.values(d.documentos).filter(Boolean).length : 0;
+      const docsTotal = 5;
+      list.innerHTML += `
+        <div class="history-card" style="cursor:${puedeEditar ? "pointer" : "default"};" ${puedeEditar ? `onclick="abrirMaquinaria('${d.id}')"` : ""}>
+          <div class="hc-header"><span>${d.eco || d.numInterno || "—"}</span><span>${d.activa === false ? "🔴 Inactiva" : "🟢 Activa"}</span></div>
+          <p style="color:var(--text-muted); font-size:12px; margin-top:5px;">
+            ${d.tipo || "—"} · ${d.marca || ""} ${d.modelo || ""}<br/>
+            ${d.zona || "Sin zona"} ${d.subzona ? "· " + d.subzona : ""} · ${d.propiedad || "—"}<br/>
+            Docs: ${docsOk}/${docsTotal} ✔ · Consumo prom.: ${d.consumoPromedio ?? "—"} lt/hr
+          </p>
+        </div>`;
+    });
+  } catch (e) {
+    list.innerHTML = `<p style="color:var(--red);">❌ Error al cargar maquinaria: ${e.message}</p>`;
+    console.error("loadMaquinaria error:", e);
+  }
+}
+
+function abrirMaquinaria(docId) {
+  const d = docId ? window._maquinariaCache[docId] : null;
+  document.getElementById("maquinaria-modal-title").textContent = docId ? "Editar maquinaria" : "Nueva maquinaria";
+  document.getElementById("maq-doc-id").value = docId || "";
+  document.getElementById("maquinaria-error").classList.add("hidden");
+
+  llenarSelectConOtro("maq-tipo", TIPOS_MAQUINARIA);
+  llenarSelectConOtro("maq-marca", MARCAS_MAQUINARIA);
+  document.getElementById("maq-zona").innerHTML = Object.keys(ZONAS_SUBZONAS).map(z => `<option value="${z}">${z}</option>`).join("");
+
+  const tipoEnCatalogo = d && TIPOS_MAQUINARIA.includes(d.tipo);
+  document.getElementById("maq-tipo").value = tipoEnCatalogo ? d.tipo : "Otro";
+  document.getElementById("maq-tipo-otro").value = tipoEnCatalogo ? "" : (d?.tipo || "");
+  document.getElementById("maq-tipo-otro").classList.toggle("hidden", !!tipoEnCatalogo);
+
+  const marcaEnCatalogo = d && MARCAS_MAQUINARIA.includes(d.marca);
+  document.getElementById("maq-marca").value = marcaEnCatalogo ? d.marca : "Otro";
+  document.getElementById("maq-marca-otro").value = marcaEnCatalogo ? "" : (d?.marca || "");
+  document.getElementById("maq-marca-otro").classList.toggle("hidden", !!marcaEnCatalogo);
+
+  document.getElementById("maq-modelo").value = d?.modelo || "";
+  document.getElementById("maq-eco").value = d?.eco || "";
+  document.getElementById("maq-num-interno").value = d?.numInterno || "";
+  document.getElementById("maq-serie").value = d?.serie || "";
+  document.getElementById("maq-fecha-ingreso").value = d?.fechaIngreso || "";
+  document.getElementById("maq-fecha-egreso").value = d?.fechaEgreso || "";
+
+  document.getElementById("maq-zona").value = d?.zona || Object.keys(ZONAS_SUBZONAS)[0];
+  poblarSubzonas(d?.subzona || "");
+
+  document.getElementById("maq-proveedor").value = d?.proveedor || "";
+  document.getElementById("maq-propiedad").value = d?.propiedad || "Propia";
+  document.getElementById("maq-capacidad").value = d?.capacidadTanque ?? "";
+  document.getElementById("maq-consumo-bajo").value = d?.consumoBajo ?? "";
+  document.getElementById("maq-consumo-medio").value = d?.consumoMedio ?? "";
+  document.getElementById("maq-consumo-alto").value = d?.consumoAlto ?? "";
+  document.getElementById("maq-consumo-promedio").value = d?.consumoPromedio ?? "";
+  document.getElementById("maq-activa").checked = d?.activa !== false;
+
+  document.getElementById("maq-doc-permiso").checked = !!d?.documentos?.permiso;
+  document.getElementById("maq-doc-factura").checked = !!d?.documentos?.factura;
+  document.getElementById("maq-doc-dc3").checked = !!d?.documentos?.dc3;
+  document.getElementById("maq-doc-tarjeta").checked = !!d?.documentos?.tarjetaCirculacion;
+  document.getElementById("maq-doc-poliza").checked = !!d?.documentos?.poliza;
+
+  document.getElementById("btn-eliminar-maquinaria").classList.toggle("hidden", !(docId && Roles.puedeEliminarMaquinaria(currentRol)));
+  document.getElementById("modal-maquinaria").classList.remove("hidden");
+  navPush("modal-maquinaria");
+}
+
+function cerrarModalMaquinaria(desdePopstate = false) {
+  document.getElementById("modal-maquinaria").classList.add("hidden");
+  if (!desdePopstate) history.back();
+}
+
+async function guardarMaquinaria() {
+  const errBox = document.getElementById("maquinaria-error");
+  errBox.classList.add("hidden");
+
+  const docId = document.getElementById("maq-doc-id").value;
+  const tipoSel = document.getElementById("maq-tipo").value;
+  const tipo = tipoSel === "Otro" ? document.getElementById("maq-tipo-otro").value.trim() : tipoSel;
+  const marcaSel = document.getElementById("maq-marca").value;
+  const marca = marcaSel === "Otro" ? document.getElementById("maq-marca-otro").value.trim() : marcaSel;
+  const eco = document.getElementById("maq-eco").value.trim();
+  const numInterno = document.getElementById("maq-num-interno").value.trim();
+  const zona = document.getElementById("maq-zona").value;
+  const subzona = document.getElementById("maq-subzona").value;
+
+  if (!tipo) { errBox.textContent = "Indica el tipo de maquinaria."; errBox.classList.remove("hidden"); return; }
+  if (!eco && !numInterno) { errBox.textContent = "Captura al menos el # ECO o el # interno."; errBox.classList.remove("hidden"); return; }
+
+  showLoading("Guardando maquinaria...");
+  try {
+    const anterior = docId ? window._maquinariaCache[docId] : null;
+    const cambioZona = anterior && (anterior.zona !== zona || anterior.subzona !== subzona);
+
+    const data = {
+      tipo, marca,
+      modelo: document.getElementById("maq-modelo").value.trim(),
+      eco, numInterno,
+      serie: document.getElementById("maq-serie").value.trim(),
+      fechaIngreso: document.getElementById("maq-fecha-ingreso").value || null,
+      fechaEgreso: document.getElementById("maq-fecha-egreso").value || null,
+      zona, subzona,
+      proveedor: document.getElementById("maq-proveedor").value.trim(),
+      propiedad: document.getElementById("maq-propiedad").value,
+      capacidadTanque: parseFloat(document.getElementById("maq-capacidad").value) || null,
+      consumoBajo: parseFloat(document.getElementById("maq-consumo-bajo").value) || null,
+      consumoMedio: parseFloat(document.getElementById("maq-consumo-medio").value) || null,
+      consumoAlto: parseFloat(document.getElementById("maq-consumo-alto").value) || null,
+      consumoPromedio: parseFloat(document.getElementById("maq-consumo-promedio").value) || null,
+      activa: document.getElementById("maq-activa").checked,
+      documentos: {
+        permiso: document.getElementById("maq-doc-permiso").checked,
+        factura: document.getElementById("maq-doc-factura").checked,
+        dc3: document.getElementById("maq-doc-dc3").checked,
+        tarjetaCirculacion: document.getElementById("maq-doc-tarjeta").checked,
+        poliza: document.getElementById("maq-doc-poliza").checked,
+      },
+      actualizadoEn: window.fbTimestamp.now(),
+    };
+
+    let refMaquina;
+    if (docId) {
+      refMaquina = window.fbDoc(window.firebaseDB, "maquinaria", docId);
+      await window.fbUpdateDoc(refMaquina, data);
+    } else {
+      data.creadoEn = window.fbTimestamp.now();
+      refMaquina = window.fbDoc(window.fbCollection(window.firebaseDB, "maquinaria"));
+      await window.fbSetDoc(refMaquina, data);
+    }
+
+    // Historial de zonas (append-only, punto 7): si la máquina cambió de
+    // zona/subzona, dejamos constancia del "antes" y "después" para que el
+    // consumo de combustible se siga atribuyendo correctamente por zona.
+    if (cambioZona || !docId) {
+      const histRef = window.fbCollection(window.firebaseDB, "maquinaria", refMaquina.id, "historialZonas");
+      await window.fbAddDoc?.(histRef, {
+        zonaAnterior: anterior?.zona || null,
+        subzonaAnterior: anterior?.subzona || null,
+        zonaNueva: zona,
+        subzonaNueva: subzona,
+        fecha: window.fbTimestamp.now(),
+        usuario: currentUser?.email || "—",
+      }).catch(async () => {
+        // Fallback por si fbAddDoc no está expuesto: usamos setDoc con id propio.
+        const docHist = window.fbDoc(histRef);
+        await window.fbSetDoc(docHist, {
+          zonaAnterior: anterior?.zona || null,
+          subzonaAnterior: anterior?.subzona || null,
+          zonaNueva: zona,
+          subzonaNueva: subzona,
+          fecha: window.fbTimestamp.now(),
+          usuario: currentUser?.email || "—",
+        });
+      });
+    }
+
+    hideLoading();
+    cerrarModalMaquinaria();
+    loadMaquinaria();
+  } catch (e) {
+    hideLoading();
+    errBox.textContent = "Error: " + e.message;
+    errBox.classList.remove("hidden");
+  }
+}
+
+async function eliminarMaquinaria() {
+  if (!isMaster) return;
+  const docId = document.getElementById("maq-doc-id").value;
+  if (!docId) return;
+  if (!confirm("¿Eliminar esta maquinaria del catálogo? Esta acción no se puede deshacer.")) return;
+  showLoading("Eliminando...");
+  try {
+    await window.fbDeleteDoc(window.fbDoc(window.firebaseDB, "maquinaria", docId));
+    hideLoading();
+    cerrarModalMaquinaria();
+    loadMaquinaria();
+  } catch (e) {
+    hideLoading();
+    alert("Error al eliminar: " + e.message);
+  }
+}
+
 /* EXPORTACIONES PARA EL HTML */
 window.handleLogin = handleLogin;
 window.handleLogout = handleLogout;
@@ -1834,3 +2099,10 @@ window.cerrarModalProveedor = cerrarModalProveedor;
 window.guardarProveedor = guardarProveedor;
 window.eliminarProveedor = eliminarProveedor;
 window.descargarFotoProveedor = descargarFotoProveedor;
+window.loadMaquinaria = loadMaquinaria;
+window.abrirMaquinaria = abrirMaquinaria;
+window.cerrarModalMaquinaria = cerrarModalMaquinaria;
+window.guardarMaquinaria = guardarMaquinaria;
+window.eliminarMaquinaria = eliminarMaquinaria;
+window.toggleOtroMaquinaria = toggleOtroMaquinaria;
+window.poblarSubzonas = poblarSubzonas;
