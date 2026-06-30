@@ -639,8 +639,8 @@ async function getRendimiento(ecoActual, horoRawActual, litrosActuales, excludeD
 /* --- RESET DEL FORMULARIO (reemplaza location.reload para no cerrar sesión) --- */
 function resetFormulario() {
   // Limpiar estado de fotos
-  dataFotos   = { ini: null, fin: null, ticket: null, pend: null };
-  estadoFotos = { ini: false, fin: false, ticket: false, pend: false };
+  dataFotos   = { ini: null, fin: null, ticket: null, pend: null, horo: null };
+  estadoFotos = { ini: false, fin: false, ticket: false, pend: false, horo: false };
   currentStep = 1;
 
   // Campos del formulario
@@ -1200,7 +1200,9 @@ async function generateTicketPDF(record) {
     await new Promise((res, rej) => {
       const s = document.createElement("script");
       s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-      s.onload = res; document.head.appendChild(s);
+      s.onload = res;
+      s.onerror = () => rej(new Error("No se pudo cargar la librería de PDF (jsPDF). Revisa tu conexión a internet."));
+      document.head.appendChild(s);
     });
   }
   const { jsPDF } = window.jspdf;
