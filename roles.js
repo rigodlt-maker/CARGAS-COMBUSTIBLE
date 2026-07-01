@@ -85,8 +85,15 @@ export function puedeCrearUsuarios(rol) {
   return [ROLES.MASTER, ROLES.ADMIN].includes(rol);
 }
 
+// FIX (punto 3 de cambios.md, reforzado con la captura de pantalla del
+// panel de Usuarios): antes Admin también podía cambiar roles, lo cual
+// dejaba abierta la posibilidad de alterar el rol de otro usuario desde
+// una cuenta que no debería poder hacerlo. Ahora SOLO el Máster puede
+// cambiar el rol de un usuario ya existente. Al Admin se le sigue
+// dejando asignar el rol inicial al CREAR un usuario nuevo (eso se
+// controla aparte, en app.js, con opcionesRolDisponibles()).
 export function puedeCambiarRoles(rol) {
-  return [ROLES.MASTER, ROLES.ADMIN].includes(rol);
+  return rol === ROLES.MASTER;
 }
 
 export function puedeCambiarContrasenas(rol) {
@@ -168,28 +175,38 @@ export function puedeEliminarMaquinaria(rol) {
 }
 
 // Documentos legales (Permiso, Factura, DC3, Tarjeta de circulación, Póliza):
-// solo Admin y Coordinador (instrucción explícita; Master incluido por jerarquía).
+// ACTUALIZACIÓN (instrucción más reciente, sobre la captura de pantalla de
+// la pestaña "Permisos"): solo subir/reemplazar archivos faltantes queda
+// EXCLUSIVO para Admin (Master incluido por jerarquía). El Coordinador ya
+// NO puede subir — esto reemplaza la regla anterior donde Coordinador sí
+// podía subir. Ver nota en la respuesta sobre este cambio de criterio
+// respecto a cambios.md.
 export function puedeSubirDocumentosMaquinaria(rol) {
-  return [ROLES.ADMIN, ROLES.COORDINADOR, ROLES.MASTER].includes(rol);
+  return [ROLES.ADMIN, ROLES.MASTER].includes(rol);
 }
 
 // Ver/descargar el PDF YA SUBIDO de un documento de maquinaria:
 //  - Admin y Master: pueden ver/descargar los 5 documentos.
-//  - Coordinador: SOLO puede ver/descargar "Permiso" (lo sube, pero no
-//    puede re-visualizar ni descargar Factura/DC3/Tarjeta/Póliza).
+//  - Coordinador: AHORA puede ver/descargar los 5 documentos (antes solo
+//    "Permiso"). Lo que NO puede hacer es subir ni eliminar.
 //  - Residente y Visor: no ven ningún documento (ya bloqueado por
 //    puedeEditarMaquinaria al abrir la ficha en modo lectura).
 export function puedeVerDocumentoMaquinaria(rol, campo) {
-  if (rol === ROLES.MASTER || rol === ROLES.ADMIN) return true;
-  if (rol === ROLES.COORDINADOR) return campo === 'permiso';
-  return false;
+  return [ROLES.MASTER, ROLES.ADMIN, ROLES.COORDINADOR].includes(rol);
 }
 
-// Pestaña "Permisos" (punto 7.2): mismos roles que pueden subir/editar
-// documentos de maquinaria. Visor y Residente no la ven (no estaba
-// contemplada para ellos en los requerimientos originales).
+// Eliminar un PDF de documento de maquinaria YA subido: EXCLUSIVO para
+// Admin (Master incluido por jerarquía). Ni Coordinador ni nadie más.
+export function puedeEliminarDocumentoMaquinaria(rol) {
+  return [ROLES.ADMIN, ROLES.MASTER].includes(rol);
+}
+
+// Pestaña "Permisos" (punto 7.2): quién puede VER la pestaña (consultar
+// y, según su rol, subir/descargar/eliminar). Admin, Coordinador y Master
+// la ven. Ya NO se amarra a puedeSubirDocumentosMaquinaria porque ahora
+// Coordinador puede entrar a ver/descargar aunque no pueda subir.
 export function puedeVerPermisos(rol) {
-  return puedeSubirDocumentosMaquinaria(rol);
+  return [ROLES.MASTER, ROLES.ADMIN, ROLES.COORDINADOR].includes(rol);
 }
 
 /* ───────────────────────────── RESUMEN / DASHBOARD / GRÁFICOS ───────────────────────────── */

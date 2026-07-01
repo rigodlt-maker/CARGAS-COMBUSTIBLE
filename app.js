@@ -301,7 +301,7 @@ async function loadFirebase() {
   const { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js");
   const { getFirestore, collection, addDoc, getDocs, getDoc, query, where, orderBy, Timestamp, limit, doc, updateDoc, setDoc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
   const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-functions.js");
-  const { getStorage, ref, uploadString, getDownloadURL } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js");
+  const { getStorage, ref, uploadString, getDownloadURL, deleteObject } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js");
 
   const firebaseConfig = {
     apiKey:            "AIzaSyCeIsd_BrHKbAY1HrYb3HL4vG4cpadUTuU",
@@ -337,6 +337,7 @@ async function loadFirebase() {
   window.fbStorageRef     = ref;
   window.fbUploadString   = uploadString;
   window.fbGetDownloadURL = getDownloadURL;
+  window.fbDeleteObject   = deleteObject;
 
   // --- Funciones invocables (Cloud Functions con Admin SDK) ---
   // Se usan para operaciones que el SDK de cliente NO puede hacer sobre
@@ -1441,6 +1442,22 @@ async function conciliarRegistro(id) {
   } catch (e) { hideLoading(); alert("Error: " + e.message); }
 }
 
+/* --- ELIMINAR REGISTRO (bugs.txt punto 2.2 — exclusivo Máster) --- */
+async function eliminarRegistro(id) {
+  if (!isMaster) return;
+  if (!confirm("¿Eliminar este registro de forma permanente?\n\nEsta acción NO se puede deshacer.")) return;
+  showLoading("Eliminando registro...");
+  try {
+    await window.fbDeleteDoc(window.fbDoc(window.firebaseDB, "registros", id));
+    hideLoading();
+    refrescarListaActual();
+  } catch (e) {
+    hideLoading();
+    alert("No se pudo eliminar el registro: " + e.message);
+    console.error("eliminarRegistro error:", e);
+  }
+}
+
 /* --- HISTORIAL --- */
 async function loadHistory() {
   const list = document.getElementById("history-list");
@@ -1478,6 +1495,13 @@ async function loadHistory() {
         if (isMaster) {
           botones += `<button class="btn btn-ghost btn-sm" style="color:var(--blue); border:1px solid var(--blue);" onclick="conciliarRegistro('${docSnap.id}')">🔒 Conciliar</button>`;
         }
+      }
+      // FIX (bugs.txt punto 2.2): el Máster debe conservar la facultad
+      // EXCLUSIVA de eliminar registros directamente desde la interfaz —
+      // antes no existía ningún botón para esto en toda la app (y la regla
+      // de Firestore lo bloqueaba con "if false" incluso para Master).
+      if (isMaster) {
+        botones += `<button class="btn btn-ghost btn-sm" style="color:var(--red); border:1px solid var(--red);" onclick="eliminarRegistro('${docSnap.id}')">🗑️ Eliminar</button>`;
       }
 
       list.innerHTML += `
@@ -1568,7 +1592,10 @@ async function loadProveedor() {
     const filasTipo = TIPOS.map(t => {
       const { proveedor, cargado } = porTipo[t];
       const diferencia = Math.round((proveedor - cargado) * 100) / 100;
-      const hayDescuadre = Math.abs(diferencia) > 0.5;
+      // FIX (punto 4 de cambios.md): antes se toleraba hasta 0.5 L de
+      // diferencia sin marcar error. El usuario pidió tolerancia CERO —
+      // cualquier diferencia distinta de 0, por mínima que sea, marca alerta/rojo.
+      const hayDescuadre = diferencia !== 0;
       if (proveedor === 0 && cargado === 0) return ""; // no mostrar tipos sin movimiento ese día
       return `<div style="display:flex; justify-content:space-between; gap:8px; font-size:12.5px; padding:4px 0; border-bottom:1px solid var(--border);">
         <strong>${t}</strong>
@@ -1886,7 +1913,24 @@ function abrirUsuario(docId) {
     .map(r => `<option value="${r}">${Roles.ETIQUETAS_ROL[r]}</option>`).join("");
   selectRol.value = u?.rol || Roles.ROLES.RESIDENTE;
   // Si estoy editando un usuario de rango mayor al que yo puedo asignar (no debería listarse, pero por seguridad)
-  if (u && !selectRol.value) selectRol.value = u.rol;
+  if (u && !selectRol.value) {
+    // Aseguramos que la opción exista en el <select> aunque no estuviera en
+    // opcionesRolDisponibles(), para poder mostrarla (deshabilitada) sin
+    // que quede en blanco.
+    selectRol.innerHTML += `<option value="${u.rol}">${Roles.ETIQUETAS_ROL[u.rol] || u.rol}</option>`;
+    selectRol.value = u.rol;
+  }
+
+  // FIX (punto 3 de cambios.md): SOLO el Máster puede cambiar el rol de un
+  // usuario YA EXISTENTE. Antes el <select> quedaba habilitado para
+  // cualquiera con acceso al panel (Admin, e incluso visualmente
+  // Coordinador), lo que permitía alterar roles sin deber poder hacerlo.
+  // Al CREAR un usuario nuevo (docId vacío) sí se deja elegir el rol
+  // inicial, porque eso ya está controlado por quién puede crear usuarios
+  // (puedeCrearUsuarios) y por opcionesRolDisponibles().
+  const soloLecturaRol = !!docId && !Roles.puedeCambiarRoles(currentRol);
+  selectRol.disabled = soloLecturaRol;
+  document.getElementById("usuario-rol-nota")?.classList.toggle("hidden", !soloLecturaRol);
 
   // Contraseña directa: solo aplica al CREAR (punto 2.1). Al editar no se toca aquí.
   const pwGroup = document.getElementById("usuario-password-group");
@@ -2402,6 +2446,15 @@ function abrirMaquinaria(docId, origen = "permisos") {
     link.textContent = campo === "permiso" ? "📥 Descargar PDF" : "Ver PDF";
     link.classList.toggle("hidden", !docNorm.url || !puedeVerEsteDoc);
 
+    // Eliminar archivo (nuevo, ver instrucciones sobre "Solo el admin puede
+    // eliminar los archivos"): exclusivo para quien puedeEliminarDocumentoMaquinaria,
+    // y solo tiene sentido si ya hay un PDF subido.
+    const deleteLink = document.getElementById(`maq-doc-${idSufijo}-delete`);
+    if (deleteLink) {
+      const puedeEliminarEsteDoc = Roles.puedeEliminarDocumentoMaquinaria(currentRol);
+      deleteLink.classList.toggle("hidden", !docNorm.url || !puedeEliminarEsteDoc || origen !== "permisos");
+    }
+
     const { estado, diasRestantes } = estadoDocumento(docNorm);
     const info = ESTADO_DOC_INFO[estado];
     const badge = document.getElementById(`maq-doc-${idSufijo}-estado`);
@@ -2413,7 +2466,14 @@ function abrirMaquinaria(docId, origen = "permisos") {
   });
 
   document.getElementById("btn-eliminar-maquinaria").classList.toggle("hidden", !(docId && Roles.puedeEliminarMaquinaria(currentRol)));
-  document.getElementById("btn-descargar-consumos").classList.toggle("hidden", !docId); // solo tiene sentido en máquinas ya existentes
+
+  // FIX (punto 2 de cambios.md / captura "cambios_1.png"): el botón
+  // "Descargar consumos (Excel)" pertenece estrictamente a la gestión de
+  // Maquinaria. Antes solo se ocultaba si no había docId, pero seguía
+  // apareciendo al abrir la ficha desde la pestaña "Permisos". Ahora solo
+  // se muestra si hay docId Y el modal se abrió desde "Maquinaria".
+  const origenMaquinaria = origen === "maquinaria";
+  document.getElementById("btn-descargar-consumos").classList.toggle("hidden", !(docId && origenMaquinaria));
 
   // Modo solo-lectura: roles sin permiso de edición (ej. Visor, Residente)
   // pueden abrir la ficha para CONSULTAR y descargar consumos, pero no
@@ -2429,7 +2489,6 @@ function abrirMaquinaria(docId, origen = "permisos") {
   // vencimiento) como un solo grupo — solo queda visible el nombre del
   // documento, su badge de estado (Falta/Vencido/Por vencer/OK) y el
   // link "Ver PDF" si el rol tiene permiso para verlo.
-  const origenMaquinaria = origen === "maquinaria";
   document.getElementById("maq-docs-nota-permisos")?.classList.toggle("hidden", !origenMaquinaria);
 
   const puedeSubirDocs = Roles.puedeSubirDocumentosMaquinaria(currentRol) && !origenMaquinaria;
@@ -2524,6 +2583,51 @@ async function loadPermisos() {
   }
 }
 
+
+// Elimina un PDF ya subido de un documento de maquinaria: borra el archivo
+// de Storage y limpia el campo en Firestore (documentos.{campo}). Exclusivo
+// para quien puedeEliminarDocumentoMaquinaria (Admin/Master) — se valida
+// otra vez aquí por si acaso, aunque el botón ya está oculto para otros roles.
+async function eliminarDocumentoMaquinaria(idSufijo) {
+  const info = DOCUMENTOS_TIPOS.find(t => t.idSufijo === idSufijo);
+  if (!info) return;
+  if (!Roles.puedeEliminarDocumentoMaquinaria(currentRol)) return;
+
+  const docId = document.getElementById("maq-doc-id").value;
+  if (!docId) return;
+  if (!confirm(`¿Eliminar el PDF de "${info.label}"? Esta acción no se puede deshacer.`)) return;
+
+  showLoading("Eliminando documento...");
+  try {
+    const anterior = window._maquinariaCache[docId];
+    const docNorm = normalizarDocumento(anterior?.documentos?.[info.campo]);
+
+    if (docNorm.path) {
+      const sref = window.fbStorageRef(window.firebaseStorage, docNorm.path);
+      // Si el archivo ya no existe en Storage (borrado manual, etc.) no
+      // queremos que eso tumbe la limpieza del registro en Firestore.
+      await window.fbDeleteObject(sref).catch(err => console.warn("No se pudo borrar de Storage (se ignora):", err));
+    }
+
+    const nuevoDoc = { tiene: false, url: null, path: null, vencimiento: docNorm.vencimiento, subidoEn: null, subidoPor: null };
+    const refMaquina = window.fbDoc(window.firebaseDB, "maquinaria", docId);
+    await window.fbUpdateDoc(refMaquina, { [`documentos.${info.campo}`]: nuevoDoc });
+
+    // Refrescar la caché local y volver a pintar el modal ya abierto.
+    if (window._maquinariaCache[docId]) {
+      window._maquinariaCache[docId] = {
+        ...window._maquinariaCache[docId],
+        documentos: { ...window._maquinariaCache[docId].documentos, [info.campo]: nuevoDoc },
+      };
+    }
+    hideLoading();
+    abrirMaquinaria(docId, "permisos");
+  } catch (e) {
+    hideLoading();
+    alert("No se pudo eliminar el documento: " + e.message);
+    console.error("eliminarDocumentoMaquinaria error:", e);
+  }
+}
 
 // Deshabilita/habilita todos los campos del formulario de Maquinaria y
 // oculta el botón "Guardar" cuando el rol actual no puede editar.
@@ -3283,3 +3387,7 @@ window.loadDashboard = loadDashboard;
 // onclick="mostrarMaquinasPorNivel('Bajo')" de los KPI-cards lanzaba
 // "mostrarMaquinasPorNivel is not defined" al hacer click.
 window.mostrarMaquinasPorNivel = mostrarMaquinasPorNivel;
+// Nuevas (esta ronda de correcciones): eliminar PDF individual de un
+// documento de maquinaria (Admin/Master) y eliminar registro (Máster).
+window.eliminarDocumentoMaquinaria = eliminarDocumentoMaquinaria;
+window.eliminarRegistro = eliminarRegistro;
