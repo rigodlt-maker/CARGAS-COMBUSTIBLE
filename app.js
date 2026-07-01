@@ -575,9 +575,27 @@ function navPush(nivel) {
   history.pushState({ fuelControlNivel: nivel }, "");
 }
 
+// BUG REAL (punto C de observaciones, "se reinicia al dar Cancelar"):
+// cerrarModalX(false) primero OCULTA el modal y LUEGO llama a
+// history.back() solo para "consumir" la entrada que se había
+// empujado al abrirlo. Pero el evento popstate que dispara ese
+// history.back() se procesa cuando el modal YA está oculto, así que el
+// listener de abajo nunca lo encontraba en su lista de "modales
+// abiertos" y caía al siguiente caso (volver a la pestaña Cargas) sin
+// importar en qué pestaña/modal estuviera el usuario. Esta bandera le
+// avisa al listener "este popstate lo disparé yo mismo al cerrar un
+// modal por botón, ignóralo por completo" para que no haga nada más.
+let popstateAutoDisparado = false;
+function consumirHistorialDeModal() {
+  popstateAutoDisparado = true;
+  history.back();
+}
+
 window.addEventListener("popstate", (e) => {
+  if (popstateAutoDisparado) { popstateAutoDisparado = false; return; }
+
   // ¿Hay un modal abierto? Ciérralo y no hagas nada más.
-  const modalesAbiertos = ["modal-pendiente", "modal-editar", "modal-usuario", "modal-proveedor"]
+  const modalesAbiertos = ["modal-pendiente", "modal-editar", "modal-usuario", "modal-proveedor", "modal-maquinaria"]
     .filter(id => !document.getElementById(id)?.classList.contains("hidden"));
 
   if (modalesAbiertos.length > 0) {
@@ -586,6 +604,7 @@ window.addEventListener("popstate", (e) => {
       if (id === "modal-editar") cerrarModalEditar(true);
       if (id === "modal-usuario") cerrarModalUsuario(true);
       if (id === "modal-proveedor") cerrarModalProveedor(true);
+      if (id === "modal-maquinaria") cerrarModalMaquinaria(true);
     });
     return;
   }
@@ -969,7 +988,7 @@ async function obtenerHorasTrabajadasPrevias(eco, horoRawActual, excludeDocId = 
 
 // Tolerancia para no disparar falsas alarmas por estimaciones (consumo
 // promedio y horómetro nunca son exactos al 100%).
-const ANDON_TOLERANCIA = 1.15; // 15% de margen
+const ANDON_TOLERANCIA = 1.10; // 10% de margen
 
 async function verificarAlertasAndon(eco, litros, horoRawActual, excludeDocId = null) {
   const alertas = [];
@@ -1267,7 +1286,7 @@ function abrirPendiente(id) {
 
 function cerrarModalPendiente(desdePopstate = false) {
   document.getElementById("modal-pendiente").classList.add("hidden");
-  if (!desdePopstate) history.back();
+  if (!desdePopstate) consumirHistorialDeModal();
 }
 
 function refrescarListaActual() {
@@ -1342,7 +1361,7 @@ function abrirEditar(id) {
 
 function cerrarModalEditar(desdePopstate = false) {
   document.getElementById("modal-editar").classList.add("hidden");
-  if (!desdePopstate) history.back();
+  if (!desdePopstate) consumirHistorialDeModal();
 }
 
 async function guardarEdicion() {
@@ -1593,7 +1612,7 @@ function abrirProveedor(docId) {
 
 function cerrarModalProveedor(desdePopstate = false) {
   document.getElementById("modal-proveedor").classList.add("hidden");
-  if (!desdePopstate) history.back();
+  if (!desdePopstate) consumirHistorialDeModal();
 }
 
 async function guardarProveedor() {
@@ -1861,7 +1880,7 @@ function abrirUsuario(docId) {
 
 function cerrarModalUsuario(desdePopstate = false) {
   document.getElementById("modal-usuario").classList.add("hidden");
-  if (!desdePopstate) history.back();
+  if (!desdePopstate) consumirHistorialDeModal();
 }
 
 async function guardarUsuario() {
@@ -2213,6 +2232,17 @@ function llenarSelectConOtro(selectId, opciones) {
   sel.innerHTML = opciones.map(o => `<option value="${o}">${o}</option>`).join("");
 }
 
+// Punto C: si el # ECO está vacío, lo refleja con el # Interno mientras
+// el usuario escribe (la mayoría de las máquinas del CSV usan el mismo
+// valor para ambos). Si el usuario ya escribió algo distinto en ECO, no
+// se le pisa.
+function syncEcoConInterno() {
+  const ecoInput = document.getElementById("maq-eco");
+  if (!ecoInput.value.trim()) {
+    ecoInput.value = document.getElementById("maq-num-interno").value;
+  }
+}
+
 function toggleOtroMaquinaria(campo) {
   const sel = document.getElementById(`maq-${campo}`);
   const otro = document.getElementById(`maq-${campo}-otro`);
@@ -2315,7 +2345,7 @@ function abrirMaquinaria(docId) {
   document.getElementById("maq-marca-otro").classList.toggle("hidden", !!marcaEnCatalogo);
 
   document.getElementById("maq-modelo").value = d?.modelo || "";
-  document.getElementById("maq-eco").value = d?.eco || "";
+  document.getElementById("maq-eco").value = d?.eco || d?.numInterno || "";
   document.getElementById("maq-num-interno").value = d?.numInterno || "";
   document.getElementById("maq-serie").value = d?.serie || "";
   document.getElementById("maq-fecha-ingreso").value = d?.fechaIngreso || "";
@@ -2465,7 +2495,7 @@ function setMaquinariaFormReadOnly(soloLectura) {
 
 function cerrarModalMaquinaria(desdePopstate = false) {
   document.getElementById("modal-maquinaria").classList.add("hidden");
-  if (!desdePopstate) history.back();
+  if (!desdePopstate) consumirHistorialDeModal();
 }
 
 async function guardarMaquinaria() {
@@ -2484,6 +2514,14 @@ async function guardarMaquinaria() {
 
   if (!tipo) { errBox.textContent = "Indica el tipo de maquinaria."; errBox.classList.remove("hidden"); return; }
   if (!eco && !numInterno) { errBox.textContent = "Captura al menos el # ECO o el # interno."; errBox.classList.remove("hidden"); return; }
+
+  // BUG REAL (punto C): el catálogo importado del CSV solo trae "# Interno",
+  // así que el campo "# ECO" llegaba vacío y al subir un documento tronaba
+  // pidiendo "Captura el # ECO" aunque la máquina ya tuviera identificador.
+  // Mismo criterio que tenían los datos del CSV: si no se capturó un ECO
+  // distinto, se usa el # Interno como identificador para guardar y para
+  // la ruta de Storage de los documentos.
+  const ecoEfectivo = eco || numInterno;
 
   showLoading("Guardando maquinaria...");
   try {
@@ -2504,8 +2542,8 @@ async function guardarMaquinaria() {
       let subidoPor = anteriorDoc.subidoPor;
 
       if (file) {
-        if (!eco) throw new Error(`Captura el # ECO antes de subir el PDF de "${campo}".`);
-        const subida = await subirDocumentoMaquinaria(file, eco, idSufijo);
+        if (!ecoEfectivo) throw new Error(`Captura el # ECO o el # Interno antes de subir el PDF de "${campo}".`);
+        const subida = await subirDocumentoMaquinaria(file, ecoEfectivo, idSufijo);
         url = subida.url;
         path = subida.path;
         subidoEn = window.fbTimestamp.now();
@@ -2523,7 +2561,7 @@ async function guardarMaquinaria() {
     const data = {
       tipo, marca,
       modelo: document.getElementById("maq-modelo").value.trim(),
-      eco, numInterno,
+      eco: ecoEfectivo, numInterno,
       serie: document.getElementById("maq-serie").value.trim(),
       fechaIngreso: document.getElementById("maq-fecha-ingreso").value || null,
       fechaEgreso: document.getElementById("maq-fecha-egreso").value || null,
@@ -2735,6 +2773,10 @@ async function loadResumen() {
   }
   const desde = desdeInput.value, hasta = hastaInput.value;
   const zonaFiltro = document.getElementById("res-f-zona").value;
+
+  // Punto 5: el Visor sí puede descargar el PDF de Resumen aunque no
+  // pueda editar nada más en la app.
+  document.getElementById("btn-pdf-resumen")?.classList.toggle("hidden", !Roles.puedeDescargarPDFResumen(currentRol));
 
   document.getElementById("res-rendimientos-chart").innerHTML = "Cargando...";
   document.getElementById("res-equipos-list").innerHTML = "Cargando...";
@@ -2978,6 +3020,7 @@ window.cerrarModalMaquinaria = cerrarModalMaquinaria;
 window.guardarMaquinaria = guardarMaquinaria;
 window.eliminarMaquinaria = eliminarMaquinaria;
 window.toggleOtroMaquinaria = toggleOtroMaquinaria;
+window.syncEcoConInterno = syncEcoConInterno;
 window.poblarSubzonas = poblarSubzonas;
 window.loadResumen = loadResumen;
 window.descargarResumenPDF = descargarResumenPDF;

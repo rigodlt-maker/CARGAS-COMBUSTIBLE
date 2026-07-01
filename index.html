@@ -347,12 +347,27 @@
 
   <div class="tab-content" id="content-resumen">
     <div class="list-container">
-      <div class="list-header"><h2>📄 Resumen</h2><p>Informe ejecutivo de rendimientos y equipos. Disponible próximamente.</p></div>
-      <div style="text-align:center; padding:40px 15px; color: var(--text-muted);">
-        <p style="font-size:14px;">Esta sección estará disponible próximamente.</p>
+      <div class="list-header"><h2>📄 Resumen</h2><p>Informe ejecutivo de rendimientos y equipos activos.</p></div>
+
+      <div class="filter-row" style="margin-bottom:8px; flex-wrap:wrap; gap:8px;">
+        <input type="date" id="res-fecha-desde" class="field-input" style="flex:1; min-width:140px;" onchange="loadResumen()" />
+        <input type="date" id="res-fecha-hasta" class="field-input" style="flex:1; min-width:140px;" onchange="loadResumen()" />
       </div>
+      <div class="field-group">
+        <select id="res-f-zona" class="field-input" onchange="loadResumen()"><option value="">Todas las zonas</option></select>
+      </div>
+
+      <button id="btn-pdf-resumen" class="btn btn-outline hidden" onclick="descargarResumenPDF()" style="width:100%; margin-bottom:18px;">📄 Descargar PDF del Resumen</button>
+
+      <h3 style="font-family:var(--font-display); font-size:15px; margin-bottom:4px;">Rendimientos</h3>
+      <p id="res-rendimientos-sub" style="font-size:11.5px; color:var(--text-muted); margin-bottom:10px;"></p>
+      <div id="res-rendimientos-chart" style="margin-bottom:24px;"></div>
+
+      <h3 style="font-family:var(--font-display); font-size:15px; margin-bottom:10px;">Equipos</h3>
+      <div id="res-equipos-list" class="history-list"></div>
     </div>
   </div>
+
 
   <div class="tab-content" id="content-usuarios">
     <div class="list-container">
@@ -364,10 +379,24 @@
 
   <div class="tab-content" id="content-graficos">
     <div class="list-container">
-      <div class="list-header"><h2>📊 Gráficos</h2><p>Solo visible para Administrador General y Administrador Maestro.</p></div>
-      <div style="text-align:center; padding:40px 15px; color: var(--text-muted);">
-        <p style="font-size:14px;">Esta sección estará disponible próximamente.</p>
+      <div class="list-header"><h2>📊 Gráficos</h2><p>Dashboard de KPI's de consumo por maquinaria.</p></div>
+
+      <div class="filter-row" style="margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+        <select id="dash-f-eco" class="field-input" style="flex:1; min-width:120px;" onchange="loadDashboard()"><option value="">Todas las máquinas</option></select>
+        <select id="dash-f-zona" class="field-input" style="flex:1; min-width:120px;" onchange="loadDashboard()"><option value="">Todas las zonas</option></select>
+        <select id="dash-f-proveedor" class="field-input" style="flex:1; min-width:120px;" onchange="loadDashboard()"><option value="">Todos los proveedores</option></select>
       </div>
+
+      <div id="dash-kpis" style="margin-bottom:20px;"></div>
+
+      <h3 style="font-family:var(--font-display); font-size:15px; margin-bottom:10px;">Máquinas por zona</h3>
+      <div id="dash-chart-zona" style="margin-bottom:24px;"></div>
+
+      <h3 style="font-family:var(--font-display); font-size:15px; margin-bottom:10px;">Máquinas por subzona</h3>
+      <div id="dash-chart-subzona" style="margin-bottom:24px;"></div>
+
+      <h3 style="font-family:var(--font-display); font-size:15px; margin-bottom:10px;">Detalle por tipo de maquinaria</h3>
+      <div id="dash-tabla" style="overflow-x:auto;"></div>
     </div>
   </div>
 
@@ -481,7 +510,7 @@
     <div class="field-group"><label class="field-label">Modelo</label><input type="text" id="maq-modelo" class="field-input" placeholder="Ej. 980K, LS138, PC450" /></div>
     <div class="field-group" style="display:flex; gap:10px;">
       <div style="flex:1;"><label class="field-label"># Económico (ECO)</label><input type="text" id="maq-eco" class="field-input" /></div>
-      <div style="flex:1;"><label class="field-label"># Interno</label><input type="text" id="maq-num-interno" class="field-input" /></div>
+      <div style="flex:1;"><label class="field-label"># Interno</label><input type="text" id="maq-num-interno" class="field-input" oninput="syncEcoConInterno()" /></div>
     </div>
     <div class="field-group"><label class="field-label"># de Serie</label><input type="text" id="maq-serie" class="field-input" /></div>
     <div class="field-group"><label class="field-label">Fecha de ingreso</label><input type="date" id="maq-fecha-ingreso" class="field-input" /></div>
