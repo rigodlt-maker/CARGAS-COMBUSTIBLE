@@ -320,7 +320,7 @@
           <option value="inactiva">Solo inactivas</option>
         </select>
       </div>
-      <button id="btn-nueva-maquina" class="btn btn-primary hidden" onclick="abrirMaquinaria()" style="margin-bottom:15px; width:100%;">+ Agregar nueva maquinaria</button>
+      <button id="btn-nueva-maquina" class="btn btn-primary hidden" onclick="abrirMaquinaria(null, 'maquinaria')" style="margin-bottom:15px; width:100%;">+ Agregar nueva maquinaria</button>
       <div id="maquinaria-list" class="history-list"></div>
     </div>
   </div>
@@ -359,11 +359,11 @@
 
       <button id="btn-pdf-resumen" class="btn btn-outline hidden" onclick="descargarResumenPDF()" style="width:100%; margin-bottom:18px;">📄 Descargar PDF del Resumen</button>
 
-      <h3 style="font-family:var(--font-display); font-size:15px; margin-bottom:4px;">Rendimientos</h3>
+      <h3 class="chart-section-title" style="margin-bottom:4px;">Rendimientos</h3>
       <p id="res-rendimientos-sub" style="font-size:11.5px; color:var(--text-muted); margin-bottom:10px;"></p>
-      <div id="res-rendimientos-chart" style="margin-bottom:24px;"></div>
+      <div id="res-rendimientos-chart" class="chart-card" style="margin-bottom:24px;"></div>
 
-      <h3 style="font-family:var(--font-display); font-size:15px; margin-bottom:10px;">Equipos</h3>
+      <h3 class="chart-section-title">Equipos</h3>
       <div id="res-equipos-list" class="history-list"></div>
     </div>
   </div>
@@ -387,15 +387,18 @@
         <select id="dash-f-proveedor" class="field-input" style="flex:1; min-width:120px;" onchange="loadDashboard()"><option value="">Todos los proveedores</option></select>
       </div>
 
-      <div id="dash-kpis" style="margin-bottom:20px;"></div>
+      <div id="dash-kpis" class="kpi-grid" style="margin-bottom:16px;"></div>
 
-      <h3 style="font-family:var(--font-display); font-size:15px; margin-bottom:10px;">Máquinas por zona</h3>
-      <div id="dash-chart-zona" style="margin-bottom:24px;"></div>
+      <h3 class="chart-section-title">Distribución de consumo</h3>
+      <div id="dash-donut" style="margin-bottom:24px;"></div>
 
-      <h3 style="font-family:var(--font-display); font-size:15px; margin-bottom:10px;">Máquinas por subzona</h3>
-      <div id="dash-chart-subzona" style="margin-bottom:24px;"></div>
+      <h3 class="chart-section-title">Máquinas por zona</h3>
+      <div id="dash-chart-zona" class="chart-card" style="margin-bottom:20px;"></div>
 
-      <h3 style="font-family:var(--font-display); font-size:15px; margin-bottom:10px;">Detalle por tipo de maquinaria</h3>
+      <h3 class="chart-section-title">Máquinas por subzona</h3>
+      <div id="dash-chart-subzona" class="chart-card" style="margin-bottom:20px;"></div>
+
+      <h3 class="chart-section-title">Detalle por tipo de maquinaria</h3>
       <div id="dash-tabla" style="overflow-x:auto;"></div>
     </div>
   </div>
@@ -550,6 +553,9 @@
 
     <div class="field-group">
       <label class="field-label" style="margin-bottom:8px; display:block;">Documentos (✔ checkbox = se tiene · PDF y vencimiento son opcionales, se pueden subir después)</label>
+      <div id="maq-docs-nota-permisos" class="alert alert-info hidden" style="margin-bottom:10px; font-size:12.5px;">
+        📌 Para subir o reemplazar archivos, fechas de vencimiento y checkboxes de documentos, usa la pestaña <strong>Permisos</strong>. Aquí solo puedes consultar el estado.
+      </div>
 
       <div class="doc-maquinaria-row" style="border:1px solid var(--border); border-radius:var(--radius); padding:10px; margin-bottom:8px;">
         <label class="toggle-label" style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="maq-doc-permiso" /> Permiso <span id="maq-doc-permiso-estado" class="badge-diesel" style="margin-left:auto; font-size:11px; display:none;"></span></label>

@@ -1,5 +1,5 @@
 // service-worker.js
-const CACHE_NAME = "fuelcontrol-v6";
+const CACHE_NAME = "fuelcontrol-v7";
 
 // Quitamos los íconos de aquí para que si hay un error con la imagen, 
 // no se bloquee toda la instalación de la app.

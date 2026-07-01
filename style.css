@@ -463,6 +463,7 @@ input:checked + .toggle-track .toggle-thumb { transform: translateX(18px); }
 }
 .alert-error { background: var(--red-dim); border: 1px solid rgba(248,81,73,0.3); color: #FF8C87; }
 .alert-success { background: var(--green-dim); border: 1px solid rgba(46,160,67,0.3); color: #4DB85A; }
+.alert-info { background: rgba(88,166,255,0.12); border: 1px solid rgba(88,166,255,0.3); color: var(--blue); }
 
 /* ============================================
    HISTORIAL
@@ -491,56 +492,86 @@ input:checked + .toggle-track .toggle-thumb { transform: translateX(18px); }
 .hc-litros span { font-size: 11px; color: var(--text-muted); font-family: var(--font-body); font-weight: 400; }
 
 /* ============================================
-   GRÁFICOS DE BARRAS (Resumen y Dashboard/Gráficos)
-   Generados por renderBarras() en app.js — sin estas
-   reglas, las barras no tenían ancho/alto y no se veían.
+   GRÁFICOS (Resumen y Dashboard/Gráficos)
+   Generados como SVG por renderBarChart()/renderDonutChart() en app.js.
+   Escalan con viewBox, así que se ven nítidos en cualquier pantalla,
+   incluyendo celular.
    ============================================ */
-.bar-row {
-  display: flex; align-items: center; gap: 10px;
-  margin-bottom: 10px;
+.chart-section-title {
+  font-family: var(--font-display); font-size: 14.5px; font-weight: 600;
+  margin-bottom: 10px; color: var(--text);
+  display: flex; align-items: center; gap: 6px;
 }
-.bar-label {
-  flex: 0 0 120px; max-width: 120px;
-  font-size: 12.5px; color: var(--text-muted);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.chart-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 14px 12px;
 }
-.bar-track {
-  flex: 1; height: 22px;
-  background: var(--bg-elevated); border: 1px solid var(--border);
-  border-radius: 6px; overflow: hidden;
-  position: relative;
+.chart-svg { width: 100%; height: auto; display: block; }
+.chart-grid-line { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 4; opacity: 0.6; }
+.chart-bar-label {
+  font-size: 9.5px; fill: var(--text-muted); font-family: var(--font-body);
 }
-.bar-fill {
-  height: 100%; min-width: 4px;
-  background: linear-gradient(90deg, var(--orange), var(--orange-glow));
-  display: flex; align-items: center; justify-content: flex-end;
-  border-radius: 6px;
-  transition: width 0.3s ease;
+.chart-bar-track { fill: var(--bg-elevated); stroke: var(--border); stroke-width: 1; }
+.chart-bar-fill { transition: width 0.4s ease; }
+.chart-bar-value {
+  font-size: 9.5px; fill: var(--text); font-family: var(--font-mono); font-weight: 700;
 }
-.bar-fill-value {
-  font-size: 11px; font-weight: 700; color: var(--text);
-  padding-right: 8px; white-space: nowrap;
-  font-family: var(--font-mono);
+.chart-empty {
+  text-align: center; padding: 28px 14px; color: var(--text-muted);
+  font-size: 13px; background: var(--bg-card);
+  border: 1px dashed var(--border); border-radius: var(--radius-lg);
+}
+
+/* Dona de distribución (Bajo/Medio/Alto/Sin datos) */
+.donut-wrap {
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 16px;
+}
+.donut-svg { width: 128px; height: 128px; flex-shrink: 0; }
+.donut-seg { transition: stroke-dasharray 0.4s ease; }
+.donut-total-num { font-family: var(--font-display); font-size: 24px; font-weight: 700; fill: var(--text); }
+.donut-total-label { font-size: 9px; fill: var(--text-muted); letter-spacing: 0.04em; }
+.donut-legend { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 9px; }
+.donut-legend-item { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.donut-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.donut-legend-label { flex: 1; color: var(--text); }
+.donut-legend-value { color: var(--text-muted); font-family: var(--font-mono); font-size: 11.5px; }
+
+@media (max-width: 380px) {
+  .donut-wrap { flex-direction: column; text-align: center; }
+  .donut-legend { width: 100%; }
 }
 
 /* ============================================
    KPI CARDS (Dashboard/Gráficos)
    ============================================ */
-#dash-kpis {
+.kpi-grid {
   display: grid; grid-template-columns: repeat(2, 1fr);
-  gap: 10px; margin-bottom: 20px;
+  gap: 10px;
 }
 .kpi-card {
+  position: relative; overflow: hidden;
   background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 14px;
-  text-align: center;
+  border-radius: var(--radius-lg); padding: 14px 14px 14px 18px;
+  text-align: left; display: flex; flex-direction: column; gap: 2px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
 }
+.kpi-card::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  background: var(--border);
+}
+.kpi-card.kpi-green::before { background: var(--green); }
+.kpi-card.kpi-orange::before { background: var(--orange); }
+.kpi-card.kpi-red::before { background: var(--red); }
+.kpi-card.kpi-neutral::before { background: var(--text-dim); }
+.kpi-icon { font-size: 13px; opacity: 0.85; margin-bottom: 2px; }
 .kpi-num {
   font-family: var(--font-display); font-size: 26px; font-weight: 700;
-  color: var(--text);
+  color: var(--text); line-height: 1.1;
 }
 .kpi-label {
-  font-size: 11.5px; color: var(--text-muted); margin-top: 4px;
+  font-size: 11.5px; color: var(--text-muted); margin-top: 2px;
 }
 
 /* ============================================

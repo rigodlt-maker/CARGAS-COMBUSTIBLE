@@ -896,10 +896,22 @@ async function getRendimiento(ecoActual, horoRawActual, litrosActuales, excludeD
     const snap = await window.fbGetDocs(q);
     if (snap.empty) return "Primer Registro";
 
-    // Convertir horómetro "corrido" a horas decimales
-    // Formato: los dígitos excepto el último = horas, el último = décimas (cada una = 6 min)
+    // Convertir horómetro "corrido" a horas decimales.
+    // Formato: XXXX.N — los dígitos antes del punto YA son horas completas,
+    // y el dígito después del punto son décimas de hora (cada una = 6 min).
+    // Es decir, el valor "crudo" YA ES horas decimales tal cual (3421.6 =
+    // 3421h 36min = 3421.6 horas decimales); no hace falta ningún ajuste.
+    //
+    // BUG CORREGIDO: la versión anterior hacía
+    //   Math.floor(raw / 10) + (raw % 10) / 10
+    // lo cual RECORRÍA el número una posición decimal (dividía todo entre
+    // ~10), así que 3421.6 se convertía en 342.16 en vez de 3421.6. Eso
+    // dejaba "horasTrabajadas" ~10 veces menor a la real, lo que a su vez
+    // disparaba rendimientos (litros/hora) ~10 veces MÁS ALTOS de lo real
+    // y hacía que las Alertas Andon por consumo estimado casi siempre
+    // fallaran de forma incorrecta.
     function horoADecimal(raw) {
-      return Math.floor(raw / 10) + (raw % 10) / 10;
+      return parseFloat(raw);
     }
 
     const horoActualDec = horoADecimal(horoRawActual);
@@ -964,7 +976,9 @@ async function obtenerHorasTrabajadasPrevias(eco, horoRawActual, excludeDocId = 
     const snap = await window.fbGetDocs(q);
     if (snap.empty) return null;
 
-    function horoADecimal(raw) { return Math.floor(raw / 10) + (raw % 10) / 10; }
+    // Mismo cálculo que en getRendimiento() — ver el comentario ahí sobre
+    // el bug corregido (antes dividía el horómetro entre ~10 por error).
+    function horoADecimal(raw) { return parseFloat(raw); }
     const horoActualDec = horoADecimal(horoRawActual);
 
     const docsOrdenados = snap.docs
@@ -2309,7 +2323,7 @@ async function loadMaquinaria() {
       const docsOk = DOCUMENTOS_TIPOS.filter(t => normalizarDocumento(d.documentos?.[t.campo]).tiene).length;
       const docsTotal = 5;
       list.innerHTML += `
-        <div class="history-card" style="cursor:pointer;" onclick="abrirMaquinaria('${d.id}')">
+        <div class="history-card" style="cursor:pointer;" onclick="abrirMaquinaria('${d.id}', 'maquinaria')">
           <div class="hc-header"><span>${d.eco || d.numInterno || "—"}</span><span>${d.activa === false ? "🔴 Inactiva" : "🟢 Activa"}</span></div>
           <p style="color:var(--text-muted); font-size:12px; margin-top:5px;">
             ${d.tipo || "—"} · ${d.marca || ""} ${d.modelo || ""}<br/>
@@ -2324,7 +2338,7 @@ async function loadMaquinaria() {
   }
 }
 
-function abrirMaquinaria(docId) {
+function abrirMaquinaria(docId, origen = "permisos") {
   const d = docId ? window._maquinariaCache[docId] : null;
   document.getElementById("maquinaria-modal-title").textContent = docId ? "Editar maquinaria" : "Nueva maquinaria";
   document.getElementById("maq-doc-id").value = docId || "";
@@ -2397,16 +2411,26 @@ function abrirMaquinaria(docId) {
   // pueden tocar ni guardar nada.
   setMaquinariaFormReadOnly(!Roles.puedeEditarMaquinaria(currentRol));
 
-  // Refuerzo explícito (punto C): los campos para SUBIR documentos
-  // (checkbox "tiene", input de archivo y fecha de vencimiento) se
-  // habilitan/deshabilitan según puedeSubirDocumentosMaquinaria, que hoy
-  // incluye a Admin/Coordinador/Master — independiente de cualquier otro
-  // candado que pudiera aplicarse al resto del formulario en el futuro.
-  const puedeSubirDocs = Roles.puedeSubirDocumentosMaquinaria(currentRol);
+  // Punto pedido: la pestaña "Maquinaria" ya NO permite subir/editar los
+  // documentos (Permiso, Factura, DC3, Tarjeta, Póliza) — eso ahora vive
+  // únicamente en la pestaña "Permisos" (abrirMaquinaria(id) sin 2do
+  // argumento, o explícitamente con origen "permisos"). Si el modal se
+  // abrió desde Maquinaria (origen === "maquinaria"), los campos de
+  // documentos quedan en modo solo-lectura sin importar el rol, aunque
+  // ese rol normalmente sí podría subir documentos desde Permisos.
+  const origenMaquinaria = origen === "maquinaria";
+  document.getElementById("maq-docs-nota-permisos")?.classList.toggle("hidden", !origenMaquinaria);
+
+  const puedeSubirDocs = Roles.puedeSubirDocumentosMaquinaria(currentRol) && !origenMaquinaria;
   DOCUMENTOS_TIPOS.forEach(({ idSufijo }) => {
     document.getElementById(`maq-doc-${idSufijo}`).disabled = !puedeSubirDocs;
     document.getElementById(`maq-doc-${idSufijo}-file`).disabled = !puedeSubirDocs;
     document.getElementById(`maq-doc-${idSufijo}-venc`).disabled = !puedeSubirDocs;
+    // Además de deshabilitarlo, ocultamos el <input type="file"> por
+    // completo cuando viene de Maquinaria: un input disabled sigue siendo
+    // visible y puede confundir ("¿por qué no me deja seleccionar
+    // archivo?"). Así queda claro que esa acción no vive aquí.
+    document.getElementById(`maq-doc-${idSufijo}-file`).classList.toggle("hidden", origenMaquinaria);
   });
 
   document.getElementById("modal-maquinaria").classList.remove("hidden");
@@ -2735,23 +2759,129 @@ async function obtenerMaquinariaParaReportes() {
   return { mapPorInterno, lista };
 }
 
-// Dibuja un set de barras horizontales simples (sin librerías externas) en
-// el contenedor indicado. data = [{ label, value }], ordenado de mayor a menor.
-function renderBarras(containerId, data, opts = {}) {
+// Escapa texto antes de insertarlo en SVG/HTML (labels vienen de zona,
+// subzona, tipo, etc. — capturados por usuarios con rol de edición, pero
+// igual no cuesta nada evitar que un "<" o "&" rompa el marcado).
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+// ============================================================
+// GRÁFICA DE BARRAS HORIZONTALES (SVG) — reemplaza a las barras
+// hechas con <div> planos. Se ve consistente en cualquier tamaño de
+// pantalla (viewBox responsivo, ideal para celular) y sin depender
+// de ninguna librería externa (sigue funcionando offline en la PWA).
+// data = [{ label, value }]
+// opts.sufijo → texto después del valor (ej. " lt/hr")
+// opts.color / opts.colorEnd → degradado de las barras
+// ============================================================
+function renderBarChart(containerId, data, opts = {}) {
   const cont = document.getElementById(containerId);
-  if (!data.length) { cont.innerHTML = `<p style="color:var(--text-muted); font-size:13px;">Sin datos para mostrar.</p>`; return; }
-  const max = Math.max(...data.map(d => d.value), 1);
+  if (!cont) return;
+  if (!data || !data.length) {
+    cont.innerHTML = `<div class="chart-empty">📭 Sin datos para mostrar.</div>`;
+    return;
+  }
+
   const sufijo = opts.sufijo || "";
-  cont.innerHTML = data
-    .sort((a, b) => b.value - a.value)
-    .map(d => {
-      const pct = Math.max((d.value / max) * 100, 3);
-      return `
-        <div class="bar-row">
-          <div class="bar-label" title="${d.label}">${d.label}</div>
-          <div class="bar-track"><div class="bar-fill" style="width:${pct}%;"><span class="bar-fill-value">${d.value}${sufijo}</span></div></div>
-        </div>`;
-    }).join("");
+  const color = opts.color || "var(--orange)";
+  const colorEnd = opts.colorEnd || "var(--orange-glow)";
+
+  const ordenados = [...data].sort((a, b) => b.value - a.value).slice(0, opts.maxItems || 12);
+  const max = Math.max(...ordenados.map(d => Math.abs(d.value)), 1);
+
+  const rowH = 26;
+  const gap = 12;
+  const topPad = 6;
+  const labelW = 92;
+  const rightPad = 44;
+  const chartW = 320;
+  const trackW = chartW - labelW - rightPad;
+  const h = ordenados.length * (rowH + gap) - gap + topPad * 2;
+  const gradId = `barGrad-${containerId}`;
+
+  const gridLines = [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const x = labelW + f * trackW;
+    return `<line x1="${x.toFixed(1)}" y1="0" x2="${x.toFixed(1)}" y2="${h}" class="chart-grid-line" />`;
+  }).join("");
+
+  const bars = ordenados.map((d, i) => {
+    const y = topPad + i * (rowH + gap);
+    const w = Math.max((Math.abs(d.value) / max) * trackW, 3);
+    const label = escapeHtml(d.label).length > 16 ? escapeHtml(d.label).slice(0, 15) + "…" : escapeHtml(d.label);
+    return `
+      <g>
+        <title>${escapeHtml(d.label)}: ${d.value}${sufijo}</title>
+        <text x="${labelW - 8}" y="${(y + rowH / 2).toFixed(1)}" text-anchor="end" dominant-baseline="middle" class="chart-bar-label">${label}</text>
+        <rect x="${labelW}" y="${y}" width="${trackW.toFixed(1)}" height="${rowH}" rx="5" class="chart-bar-track" />
+        <rect x="${labelW}" y="${y}" width="${w.toFixed(1)}" height="${rowH}" rx="5" fill="url(#${gradId})" class="chart-bar-fill" />
+        <text x="${(labelW + w + 8).toFixed(1)}" y="${(y + rowH / 2).toFixed(1)}" dominant-baseline="middle" class="chart-bar-value">${d.value}${sufijo}</text>
+      </g>`;
+  }).join("");
+
+  cont.innerHTML = `
+    <svg viewBox="0 0 ${chartW} ${h}" class="chart-svg" preserveAspectRatio="xMidYMid meet" role="img">
+      <defs>
+        <linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="${color}" />
+          <stop offset="100%" stop-color="${colorEnd}" />
+        </linearGradient>
+      </defs>
+      ${gridLines}
+      ${bars}
+    </svg>`;
+}
+
+// Se conserva el nombre anterior como alias, por si algo más lo llama.
+const renderBarras = renderBarChart;
+
+// ============================================================
+// GRÁFICA DE DONA (SVG) — para distribuciones tipo Bajo/Medio/Alto.
+// data = [{ label, value, color }]
+// ============================================================
+function renderDonutChart(containerId, data, opts = {}) {
+  const cont = document.getElementById(containerId);
+  if (!cont) return;
+  const limpio = (data || []).filter(d => d.value > 0);
+  const total = limpio.reduce((s, d) => s + d.value, 0);
+
+  if (!total) {
+    cont.innerHTML = `<div class="chart-empty">📭 Sin datos para mostrar.</div>`;
+    return;
+  }
+
+  const R = 52, strokeW = 18, cx = 64, cy = 64;
+  const C = 2 * Math.PI * R;
+  let acc = 0;
+  const segments = limpio.map(d => {
+    const frac = d.value / total;
+    const dash = Math.max(frac * C, frac > 0 ? 1.5 : 0);
+    const seg = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${d.color}" stroke-width="${strokeW}"
+      stroke-dasharray="${dash.toFixed(2)} ${(C - dash).toFixed(2)}" stroke-dashoffset="${(-acc).toFixed(2)}"
+      transform="rotate(-90 ${cx} ${cy})" class="donut-seg"><title>${escapeHtml(d.label)}: ${d.value} (${Math.round(frac * 100)}%)</title></circle>`;
+    acc += dash;
+    return seg;
+  }).join("");
+
+  const legend = limpio.map(d => `
+    <div class="donut-legend-item">
+      <span class="donut-dot" style="background:${d.color};"></span>
+      <span class="donut-legend-label">${escapeHtml(d.label)}</span>
+      <span class="donut-legend-value">${d.value} · ${Math.round((d.value / total) * 100)}%</span>
+    </div>`).join("");
+
+  cont.innerHTML = `
+    <div class="donut-wrap">
+      <svg viewBox="0 0 128 128" class="donut-svg" role="img">
+        <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--bg-elevated)" stroke-width="${strokeW}" />
+        ${segments}
+        <text x="${cx}" y="${cy - 4}" text-anchor="middle" class="donut-total-num">${total}</text>
+        <text x="${cx}" y="${cy + 13}" text-anchor="middle" class="donut-total-label">${opts.centerLabel || "total"}</text>
+      </svg>
+      <div class="donut-legend">${legend}</div>
+    </div>`;
 }
 
 function clasificarConsumo(valor, bajo, medio, alto) {
@@ -2817,7 +2947,7 @@ async function loadResumen() {
     document.getElementById("res-rendimientos-sub").textContent = zonaFiltro
       ? `Consumo promedio por tipo+marca en "${zonaFiltro}" (${desde} a ${hasta})`
       : `Consumo promedio (lt/hr) por zona (${desde} a ${hasta})`;
-    renderBarras("res-rendimientos-chart", dataRendimientos, { sufijo: " lt/hr" });
+    renderBarChart("res-rendimientos-chart", dataRendimientos, { sufijo: " lt/hr", color: "var(--orange)", colorEnd: "var(--orange-glow)" });
 
     // --- Sección EQUIPOS ---
     const activos = lista.filter(m => m.activa !== false);
@@ -2929,11 +3059,34 @@ async function loadDashboard() {
     }));
 
     document.getElementById("dash-kpis").innerHTML = `
-      <div class="kpi-card"><div class="kpi-num">${filtradas.length}</div><div class="kpi-label">Máquinas filtradas</div></div>
-      <div class="kpi-card" style="background:var(--green-dim); border-color:var(--green);"><div class="kpi-num" style="color:var(--green);">${conteo.Bajo}</div><div class="kpi-label">Consumo bajo</div></div>
-      <div class="kpi-card"><div class="kpi-num">${conteo.Medio}</div><div class="kpi-label">Consumo medio</div></div>
-      <div class="kpi-card" style="background:var(--red-dim); border-color:var(--red);"><div class="kpi-num" style="color:var(--red);">${conteo.Alto}</div><div class="kpi-label">Consumo alto</div></div>
+      <div class="kpi-card kpi-neutral">
+        <div class="kpi-icon">🚜</div>
+        <div class="kpi-num">${filtradas.length}</div>
+        <div class="kpi-label">Máquinas filtradas</div>
+      </div>
+      <div class="kpi-card kpi-green">
+        <div class="kpi-icon">🟢</div>
+        <div class="kpi-num" style="color:var(--green);">${conteo.Bajo}</div>
+        <div class="kpi-label">Consumo bajo</div>
+      </div>
+      <div class="kpi-card kpi-orange">
+        <div class="kpi-icon">🟠</div>
+        <div class="kpi-num" style="color:var(--orange);">${conteo.Medio}</div>
+        <div class="kpi-label">Consumo medio</div>
+      </div>
+      <div class="kpi-card kpi-red">
+        <div class="kpi-icon">🔴</div>
+        <div class="kpi-num" style="color:var(--red);">${conteo.Alto}</div>
+        <div class="kpi-label">Consumo alto</div>
+      </div>
     `;
+
+    renderDonutChart("dash-donut", [
+      { label: "Bajo", value: conteo.Bajo, color: "var(--green)" },
+      { label: "Medio", value: conteo.Medio, color: "var(--orange)" },
+      { label: "Alto", value: conteo.Alto, color: "var(--red)" },
+      { label: "Sin datos", value: conteo["Sin datos"], color: "var(--text-dim)" },
+    ], { centerLabel: "máquinas" });
 
     // --- Gráfico por zona y por subzona ---
     const porZona = {}, porSubzona = {};
@@ -2941,8 +3094,8 @@ async function loadDashboard() {
       const z = m.zona || "Sin zona"; porZona[z] = (porZona[z] || 0) + 1;
       const s = m.subzona || "Sin subzona"; porSubzona[s] = (porSubzona[s] || 0) + 1;
     });
-    renderBarras("dash-chart-zona", Object.entries(porZona).map(([label, value]) => ({ label, value })));
-    renderBarras("dash-chart-subzona", Object.entries(porSubzona).map(([label, value]) => ({ label, value })));
+    renderBarChart("dash-chart-zona", Object.entries(porZona).map(([label, value]) => ({ label, value })), { color: "var(--orange)", colorEnd: "var(--orange-glow)" });
+    renderBarChart("dash-chart-subzona", Object.entries(porSubzona).map(([label, value]) => ({ label, value })), { color: "var(--blue)", colorEnd: "rgba(88,166,255,0.35)" });
 
     // --- Tabla tipo / cantidad / marcas / consumo promedio ---
     const porTipo = {};
