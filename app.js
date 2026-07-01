@@ -2467,6 +2467,9 @@ function abrirMaquinaria(docId, origen = "permisos") {
 
   document.getElementById("btn-eliminar-maquinaria").classList.toggle("hidden", !(docId && Roles.puedeEliminarMaquinaria(currentRol)));
 
+  // Herramienta de reparación de vínculo (Master, solo con máquina ya existente).
+  document.getElementById("maq-vincular-cargas-wrap")?.classList.toggle("hidden", !(docId && isMaster));
+
   // FIX (punto 2 de cambios.md / captura "cambios_1.png"): el botón
   // "Descargar consumos (Excel)" pertenece estrictamente a la gestión de
   // Maquinaria. Antes solo se ocultaba si no había docId, pero seguía
@@ -2672,6 +2675,16 @@ async function guardarMaquinaria() {
     const anterior = docId ? window._maquinariaCache[docId] : null;
     const cambioZona = anterior && (anterior.zona !== zona || anterior.subzona !== subzona);
 
+    // FIX (bug reportado: cargas de "CAT-745-001" no aparecían al buscar la
+    // máquina, que ya se llamaba "CAS-745-007" en el catálogo): las cargas
+    // en "registros" se vinculan a una máquina por texto exacto de su ECO/
+    // # Interno (mismo criterio que descargarConsumosMaquinaria), no por un
+    // ID fijo. Si se edita el ECO/Interno de una máquina que YA tiene
+    // cargas capturadas, esas cargas se quedaban con el valor viejo para
+    // siempre y dejaban de "encontrarse". Guardamos el identificador de
+    // ANTES de este guardado para poder migrar las cargas después.
+    const identificadorAnterior = anterior ? (anterior.numInterno || anterior.eco || docId) : null;
+
     // Documentos (punto 7.2): si se seleccionó un PDF nuevo para algún
     // tipo, se sube primero a Storage; si no, se conserva la URL/path que
     // ya existiera. El checkbox y la fecha de vencimiento son independientes
@@ -2732,6 +2745,17 @@ async function guardarMaquinaria() {
       await window.fbSetDoc(refMaquina, data);
     }
 
+    // Migración automática de cargas: si el identificador cambió respecto
+    // al que tenía antes, re-vinculamos todas las cargas viejas al nuevo
+    // valor para que el historial no se pierda.
+    const identificadorNuevo = numInterno || ecoEfectivo || refMaquina.id;
+    if (identificadorAnterior && identificadorNuevo && identificadorAnterior !== identificadorNuevo) {
+      const migradas = await migrarCargasDeEco(identificadorAnterior, identificadorNuevo);
+      if (migradas > 0) {
+        console.info(`✅ Se re-vincularon ${migradas} carga(s) de "${identificadorAnterior}" a "${identificadorNuevo}".`);
+      }
+    }
+
     // Historial de zonas (append-only, punto 7): si la máquina cambió de
     // zona/subzona, dejamos constancia del "antes" y "después" para que el
     // consumo de combustible se siga atribuyendo correctamente por zona.
@@ -2765,6 +2789,56 @@ async function guardarMaquinaria() {
     hideLoading();
     errBox.textContent = "Error: " + e.message;
     errBox.classList.remove("hidden");
+  }
+}
+
+// Re-vincula cargas históricas de "registros" cambiando su campo `eco` de
+// un identificador viejo a uno nuevo. Se usa tanto automáticamente (al
+// guardar una máquina cuyo ECO/Interno cambió) como manualmente (botón
+// "Vincular cargas antiguas", exclusivo Master, para reparar vínculos ya
+// rotos de antes de este fix). Devuelve cuántas cargas se migraron.
+async function migrarCargasDeEco(ecoAnterior, ecoNuevo) {
+  if (!ecoAnterior || !ecoNuevo || ecoAnterior === ecoNuevo) return 0;
+  const colReg = window.fbCollection(window.firebaseDB, "registros");
+  const qAnteriores = window.fbQuery(colReg, window.fbWhere("eco", "==", ecoAnterior));
+  const snapAnteriores = await window.fbGetDocs(qAnteriores);
+  if (snapAnteriores.empty) return 0;
+  await Promise.all(snapAnteriores.docs.map(ds =>
+    window.fbUpdateDoc(window.fbDoc(window.firebaseDB, "registros", ds.id), { eco: ecoNuevo })
+  ));
+  return snapAnteriores.size;
+}
+
+// Herramienta manual (Master) para reparar cargas que YA quedaron
+// huérfanas (capturadas antes de este fix, con un ECO que ya no existe en
+// ninguna máquina del catálogo). Toma el texto del campo
+// "maq-eco-migrar-anterior" y re-vincula esas cargas a la máquina abierta.
+async function vincularCargasAntiguas() {
+  if (!isMaster) return;
+  const docId = document.getElementById("maq-doc-id").value;
+  if (!docId) return;
+  const d = window._maquinariaCache[docId];
+  const ecoAnterior = document.getElementById("maq-eco-migrar-anterior").value.trim();
+  if (!ecoAnterior) { alert("Escribe el # ECO / # Interno viejo con el que se capturaron esas cargas."); return; }
+
+  const ecoNuevo = d.numInterno || d.eco || docId;
+  if (ecoAnterior === ecoNuevo) { alert("Ese es el mismo identificador que ya tiene esta máquina."); return; }
+
+  if (!confirm(`¿Re-vincular todas las cargas capturadas como "${ecoAnterior}" a esta máquina (${ecoNuevo})?`)) return;
+
+  showLoading("Vinculando cargas...");
+  try {
+    const migradas = await migrarCargasDeEco(ecoAnterior, ecoNuevo);
+    hideLoading();
+    if (migradas === 0) {
+      alert(`No se encontraron cargas capturadas como "${ecoAnterior}".`);
+    } else {
+      alert(`✅ Se vincularon ${migradas} carga(s) de "${ecoAnterior}" a "${ecoNuevo}".`);
+      document.getElementById("maq-eco-migrar-anterior").value = "";
+    }
+  } catch (e) {
+    hideLoading();
+    alert("Error al vincular: " + e.message);
   }
 }
 
@@ -3391,3 +3465,4 @@ window.mostrarMaquinasPorNivel = mostrarMaquinasPorNivel;
 // documento de maquinaria (Admin/Master) y eliminar registro (Máster).
 window.eliminarDocumentoMaquinaria = eliminarDocumentoMaquinaria;
 window.eliminarRegistro = eliminarRegistro;
+window.vincularCargasAntiguas = vincularCargasAntiguas;

@@ -638,6 +638,13 @@
       </div>
       </div>
 
+    <div id="maq-vincular-cargas-wrap" class="hidden" style="border:1px dashed var(--border); border-radius:var(--radius); padding:10px; margin-top:14px;">
+      <label class="field-label" style="display:block; margin-bottom:6px;">🔗 Vincular cargas antiguas</label>
+      <p style="font-size:11.5px; color:var(--text-muted); margin-bottom:8px;">Si esta máquina ya tenía cargas registradas con un # ECO / # Interno anterior (por ejemplo, porque se le cambió el número), escríbelo aquí para re-vincularlas y que no se pierda su historial.</p>
+      <input type="text" id="maq-eco-migrar-anterior" class="field-input" placeholder="# ECO / # Interno anterior, ej. CAT-745-001" style="margin-bottom:8px;" />
+      <button class="btn btn-outline btn-sm" style="width:100%;" onclick="vincularCargasAntiguas()">Vincular cargas</button>
+    </div>
+
     <div id="maquinaria-error" class="alert alert-error hidden" style="margin-top:10px;"></div>
     <button id="btn-descargar-consumos" class="btn btn-outline hidden" style="width:100%; margin-top:10px;" onclick="descargarConsumosMaquinaria()">📥 Descargar consumos (Excel)</button>
     <button id="btn-guardar-maquinaria" class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="guardarMaquinaria()">Guardar</button>
