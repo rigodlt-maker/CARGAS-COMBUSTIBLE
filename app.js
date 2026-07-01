@@ -2415,9 +2415,11 @@ function abrirMaquinaria(docId, origen = "permisos") {
   // documentos (Permiso, Factura, DC3, Tarjeta, Póliza) — eso ahora vive
   // únicamente en la pestaña "Permisos" (abrirMaquinaria(id) sin 2do
   // argumento, o explícitamente con origen "permisos"). Si el modal se
-  // abrió desde Maquinaria (origen === "maquinaria"), los campos de
-  // documentos quedan en modo solo-lectura sin importar el rol, aunque
-  // ese rol normalmente sí podría subir documentos desde Permisos.
+  // abrió desde Maquinaria (origen === "maquinaria"), se oculta TODO el
+  // bloque de subida (checkbox "tiene" + input de archivo + fecha de
+  // vencimiento) como un solo grupo — solo queda visible el nombre del
+  // documento, su badge de estado (Falta/Vencido/Por vencer/OK) y el
+  // link "Ver PDF" si el rol tiene permiso para verlo.
   const origenMaquinaria = origen === "maquinaria";
   document.getElementById("maq-docs-nota-permisos")?.classList.toggle("hidden", !origenMaquinaria);
 
@@ -2426,11 +2428,12 @@ function abrirMaquinaria(docId, origen = "permisos") {
     document.getElementById(`maq-doc-${idSufijo}`).disabled = !puedeSubirDocs;
     document.getElementById(`maq-doc-${idSufijo}-file`).disabled = !puedeSubirDocs;
     document.getElementById(`maq-doc-${idSufijo}-venc`).disabled = !puedeSubirDocs;
-    // Además de deshabilitarlo, ocultamos el <input type="file"> por
-    // completo cuando viene de Maquinaria: un input disabled sigue siendo
-    // visible y puede confundir ("¿por qué no me deja seleccionar
-    // archivo?"). Así queda claro que esa acción no vive aquí.
-    document.getElementById(`maq-doc-${idSufijo}-file`).classList.toggle("hidden", origenMaquinaria);
+    // El checkbox y la zona completa de subida (archivo + fecha) se
+    // ocultan como bloque cuando origenMaquinaria es true. El checkbox
+    // sigue existiendo en el DOM (oculto) para que su valor .checked se
+    // siga guardando sin cambios al presionar "Guardar" desde Maquinaria.
+    document.getElementById(`maq-doc-${idSufijo}`).classList.toggle("hidden", origenMaquinaria);
+    document.getElementById(`doc-upload-${idSufijo}`).classList.toggle("hidden", origenMaquinaria);
   });
 
   document.getElementById("modal-maquinaria").classList.remove("hidden");

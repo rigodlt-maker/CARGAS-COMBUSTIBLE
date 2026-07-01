@@ -558,48 +558,74 @@
       </div>
 
       <div class="doc-maquinaria-row" style="border:1px solid var(--border); border-radius:var(--radius); padding:10px; margin-bottom:8px;">
-        <label class="toggle-label" style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="maq-doc-permiso" /> Permiso <span id="maq-doc-permiso-estado" class="badge-diesel" style="margin-left:auto; font-size:11px; display:none;"></span></label>
-        <input type="file" id="maq-doc-permiso-file" accept="application/pdf" class="field-input" style="margin-top:6px; font-size:12px;" />
-        <div style="display:flex; gap:8px; align-items:center; margin-top:6px;">
-          <input type="date" id="maq-doc-permiso-venc" class="field-input" style="flex:1;" title="Fecha de vencimiento" />
-          <a id="maq-doc-permiso-link" href="#" target="_blank" rel="noopener" class="hidden" style="color:var(--blue); font-size:12px; white-space:nowrap;">Ver PDF</a>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" id="maq-doc-permiso" />
+          <span style="font-size:13px; color:var(--text);">Permiso</span>
+          <span id="maq-doc-permiso-estado" class="badge-diesel" style="margin-left:auto; font-size:11px; display:none;"></span>
         </div>
+        <div id="doc-upload-permiso" class="doc-upload-zone">
+          <input type="file" id="maq-doc-permiso-file" accept="application/pdf" class="field-input" style="margin-top:6px; font-size:12px;" />
+          <label class="field-label" style="font-size:10.5px; margin:6px 0 3px; display:block;">Agregar fecha de vencimiento</label>
+          <input type="date" id="maq-doc-permiso-venc" class="field-input" title="Fecha de vencimiento" />
+        </div>
+        <a id="maq-doc-permiso-link" href="#" target="_blank" rel="noopener" class="hidden doc-view-link">📥 Ver / descargar PDF</a>
       </div>
 
       <div class="doc-maquinaria-row" style="border:1px solid var(--border); border-radius:var(--radius); padding:10px; margin-bottom:8px;">
-        <label class="toggle-label" style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="maq-doc-factura" /> Factura <span id="maq-doc-factura-estado" class="badge-diesel" style="margin-left:auto; font-size:11px; display:none;"></span></label>
-        <input type="file" id="maq-doc-factura-file" accept="application/pdf" class="field-input" style="margin-top:6px; font-size:12px;" />
-        <div style="display:flex; gap:8px; align-items:center; margin-top:6px;">
-          <input type="date" id="maq-doc-factura-venc" class="field-input" style="flex:1;" title="Fecha de vencimiento" />
-          <a id="maq-doc-factura-link" href="#" target="_blank" rel="noopener" class="hidden" style="color:var(--blue); font-size:12px; white-space:nowrap;">Ver PDF</a>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" id="maq-doc-factura" />
+          <span style="font-size:13px; color:var(--text);">Factura</span>
+          <span id="maq-doc-factura-estado" class="badge-diesel" style="margin-left:auto; font-size:11px; display:none;"></span>
         </div>
+        <div id="doc-upload-factura" class="doc-upload-zone">
+          <input type="file" id="maq-doc-factura-file" accept="application/pdf" class="field-input" style="margin-top:6px; font-size:12px;" />
+          <label class="field-label" style="font-size:10.5px; margin:6px 0 3px; display:block;">Agregar fecha de vencimiento</label>
+          <input type="date" id="maq-doc-factura-venc" class="field-input" title="Fecha de vencimiento" />
+        </div>
+        <a id="maq-doc-factura-link" href="#" target="_blank" rel="noopener" class="hidden doc-view-link">Ver PDF</a>
       </div>
 
       <div class="doc-maquinaria-row" style="border:1px solid var(--border); border-radius:var(--radius); padding:10px; margin-bottom:8px;">
-        <label class="toggle-label" style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="maq-doc-dc3" /> DC3 <span id="maq-doc-dc3-estado" class="badge-diesel" style="margin-left:auto; font-size:11px; display:none;"></span></label>
-        <input type="file" id="maq-doc-dc3-file" accept="application/pdf" class="field-input" style="margin-top:6px; font-size:12px;" />
-        <div style="display:flex; gap:8px; align-items:center; margin-top:6px;">
-          <input type="date" id="maq-doc-dc3-venc" class="field-input" style="flex:1;" title="Fecha de vencimiento" />
-          <a id="maq-doc-dc3-link" href="#" target="_blank" rel="noopener" class="hidden" style="color:var(--blue); font-size:12px; white-space:nowrap;">Ver PDF</a>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" id="maq-doc-dc3" />
+          <span style="font-size:13px; color:var(--text);">DC3</span>
+          <span id="maq-doc-dc3-estado" class="badge-diesel" style="margin-left:auto; font-size:11px; display:none;"></span>
         </div>
+        <div id="doc-upload-dc3" class="doc-upload-zone">
+          <input type="file" id="maq-doc-dc3-file" accept="application/pdf" class="field-input" style="margin-top:6px; font-size:12px;" />
+          <label class="field-label" style="font-size:10.5px; margin:6px 0 3px; display:block;">Agregar fecha de vencimiento</label>
+          <input type="date" id="maq-doc-dc3-venc" class="field-input" title="Fecha de vencimiento" />
+        </div>
+        <a id="maq-doc-dc3-link" href="#" target="_blank" rel="noopener" class="hidden doc-view-link">Ver PDF</a>
       </div>
 
       <div class="doc-maquinaria-row" style="border:1px solid var(--border); border-radius:var(--radius); padding:10px; margin-bottom:8px;">
-        <label class="toggle-label" style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="maq-doc-tarjeta" /> Tarjeta de circulación <span id="maq-doc-tarjeta-estado" class="badge-diesel" style="margin-left:auto; font-size:11px; display:none;"></span></label>
-        <input type="file" id="maq-doc-tarjeta-file" accept="application/pdf" class="field-input" style="margin-top:6px; font-size:12px;" />
-        <div style="display:flex; gap:8px; align-items:center; margin-top:6px;">
-          <input type="date" id="maq-doc-tarjeta-venc" class="field-input" style="flex:1;" title="Fecha de vencimiento" />
-          <a id="maq-doc-tarjeta-link" href="#" target="_blank" rel="noopener" class="hidden" style="color:var(--blue); font-size:12px; white-space:nowrap;">Ver PDF</a>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" id="maq-doc-tarjeta" />
+          <span style="font-size:13px; color:var(--text);">Tarjeta de circulación</span>
+          <span id="maq-doc-tarjeta-estado" class="badge-diesel" style="margin-left:auto; font-size:11px; display:none;"></span>
         </div>
+        <div id="doc-upload-tarjeta" class="doc-upload-zone">
+          <input type="file" id="maq-doc-tarjeta-file" accept="application/pdf" class="field-input" style="margin-top:6px; font-size:12px;" />
+          <label class="field-label" style="font-size:10.5px; margin:6px 0 3px; display:block;">Agregar fecha de vencimiento</label>
+          <input type="date" id="maq-doc-tarjeta-venc" class="field-input" title="Fecha de vencimiento" />
+        </div>
+        <a id="maq-doc-tarjeta-link" href="#" target="_blank" rel="noopener" class="hidden doc-view-link">Ver PDF</a>
       </div>
 
       <div class="doc-maquinaria-row" style="border:1px solid var(--border); border-radius:var(--radius); padding:10px;">
-        <label class="toggle-label" style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="maq-doc-poliza" /> Póliza <span id="maq-doc-poliza-estado" class="badge-diesel" style="margin-left:auto; font-size:11px; display:none;"></span></label>
-        <input type="file" id="maq-doc-poliza-file" accept="application/pdf" class="field-input" style="margin-top:6px; font-size:12px;" />
-        <div style="display:flex; gap:8px; align-items:center; margin-top:6px;">
-          <input type="date" id="maq-doc-poliza-venc" class="field-input" style="flex:1;" title="Fecha de vencimiento" />
-          <a id="maq-doc-poliza-link" href="#" target="_blank" rel="noopener" class="hidden" style="color:var(--blue); font-size:12px; white-space:nowrap;">Ver PDF</a>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" id="maq-doc-poliza" />
+          <span style="font-size:13px; color:var(--text);">Póliza</span>
+          <span id="maq-doc-poliza-estado" class="badge-diesel" style="margin-left:auto; font-size:11px; display:none;"></span>
         </div>
+        <div id="doc-upload-poliza" class="doc-upload-zone">
+          <input type="file" id="maq-doc-poliza-file" accept="application/pdf" class="field-input" style="margin-top:6px; font-size:12px;" />
+          <label class="field-label" style="font-size:10.5px; margin:6px 0 3px; display:block;">Agregar fecha de vencimiento</label>
+          <input type="date" id="maq-doc-poliza-venc" class="field-input" title="Fecha de vencimiento" />
+        </div>
+        <a id="maq-doc-poliza-link" href="#" target="_blank" rel="noopener" class="hidden doc-view-link">Ver PDF</a>
+      </div>
       </div>
     </div>
 

@@ -601,6 +601,18 @@ input:checked + .toggle-track .toggle-thumb { transform: translateX(18px); }
 .empty-state span { font-size: 13px; color: var(--text-dim); }
 
 /* ============================================
+   DOCUMENTOS DE MAQUINARIA — zona de subida
+   (checkbox + archivo + fecha). Se oculta como bloque
+   cuando el modal se abre desde la pestaña "Maquinaria"
+   (ahí solo se puede consultar, subir vive en "Permisos").
+   ============================================ */
+.doc-upload-zone { margin-top: 6px; }
+.doc-view-link {
+  display: inline-block; margin-top: 8px;
+  color: var(--blue); font-size: 12px; white-space: nowrap;
+}
+
+/* ============================================
    EXPORTAR
    ============================================ */
 .export-container { padding: 20px 16px 80px; max-width: 480px; margin: 0 auto; }
