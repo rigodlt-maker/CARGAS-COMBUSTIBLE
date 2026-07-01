@@ -676,7 +676,22 @@ input:checked + .toggle-track .toggle-thumb { transform: translateX(18px); }
   background: var(--bg-card); border: 1px solid var(--orange);
   border-radius: var(--radius-lg); padding: 20px;
   max-width: 420px; width: 100%; max-height: 90vh; overflow-y: auto;
+  /* FIX (modal "apachurrado" en Android): las filas de campos van en
+     pares usando display:flex + flex:1 (ej. "# Económico"/"# Interno",
+     "Zona"/"Subzona"). Por default un item flex NO se encoge más chico
+     que el ancho de su contenido (min-width:auto) — un <select> con
+     opciones largas puede pedir más ancho del que hay disponible en un
+     celular. Como overflow-y:auto no recorta el eje horizontal, ese
+     contenido se desbordaba fuera de la tarjeta y se veía "flotando"
+     separado del modal. overflow-x:hidden aquí es la red de seguridad;
+     el fix real es el min-width:0 de abajo, que si permite encoger. */
+  overflow-x: hidden;
 }
+/* FIX (modal "apachurrado"): fuerza a que absolutamente todo lo que va
+   dentro de un modal-card pueda encogerse a su ancho disponible en vez
+   de imponer su ancho de contenido mínimo. Esto es lo que resuelve el
+   desglose lateral que se veía en Maquinaria y Permisos (Android). */
+.modal-card * { min-width: 0; }
 .loading-card {
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius-lg); padding: 32px 40px;
