@@ -126,25 +126,34 @@ async function subirDocumentoMaquinaria(file, eco, idSufijo) {
   return { url, path };
 }
 
-// Calcula el estado de vigencia de un documento ya normalizado:
-// 'faltante' | 'vencido' | 'porVencer' | 'vigente' | 'sinVencimiento'.
+// Calcula el estado de vigencia de un documento ya normalizado.
+// FIX (punto 5 de cambios.md): antes regresaba solo el string del estado
+// ('faltante' | 'vencido' | 'porVencer' | 'vigente' | 'sinVencimiento') y
+// descartaba internamente "diasRestantes", que ya se calculaba pero nunca
+// salía de la función — por eso el badge solo podía mostrar texto fijo
+// ("Vencido"/"Por vencer") en vez del contador real de días que pide el
+// ticket ("3 días por vencer" / "5 días vencido"). Ahora regresa un objeto
+// { estado, diasRestantes }. Se actualizaron los dos consumidores
+// (abrirMaquinaria y loadPermisos) para leer .estado en vez del string plano.
 function estadoDocumento(docNorm) {
-  if (!docNorm.tiene && !docNorm.url) return "faltante";
-  if (!docNorm.vencimiento) return "sinVencimiento";
+  if (!docNorm.tiene && !docNorm.url) return { estado: "faltante", diasRestantes: null };
+  if (!docNorm.vencimiento) return { estado: "sinVencimiento", diasRestantes: null };
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
   const venc = new Date(docNorm.vencimiento + "T00:00:00");
   const diasRestantes = Math.round((venc - hoy) / 86400000);
-  if (diasRestantes < 0) return "vencido";
-  if (diasRestantes <= DIAS_AVISO_VENCIMIENTO) return "porVencer";
-  return "vigente";
+  if (diasRestantes < 0) return { estado: "vencido", diasRestantes };
+  if (diasRestantes <= DIAS_AVISO_VENCIMIENTO) return { estado: "porVencer", diasRestantes };
+  return { estado: "vigente", diasRestantes };
 }
 
+// FIX (punto 5): "texto" ahora recibe también diasRestantes para armar el
+// contador real que pide el ticket ("N días por vencer" / "N días vencido").
 const ESTADO_DOC_INFO = {
-  faltante:       { texto: doc => doc === "permiso" ? "Sin permiso" : "Falta",  color: "var(--text-dim)" },
-  vencido:        { texto: () => "Vencido",                                     color: "var(--red)" },
-  porVencer:      { texto: () => "Por vencer",                                  color: "var(--orange)" },
-  vigente:        { texto: () => "Vigente",                                     color: "var(--green)" },
-  sinVencimiento: { texto: () => "Cargado",                                     color: "var(--green)" },
+  faltante:       { texto: (doc) => doc === "permiso" ? "Sin permiso" : "Falta", color: "var(--text-dim)" },
+  vencido:        { texto: (doc, dias) => dias != null ? `${Math.abs(dias)} día${Math.abs(dias) === 1 ? "" : "s"} vencido` : "Vencido", color: "var(--red)" },
+  porVencer:      { texto: (doc, dias) => dias != null ? `${dias} día${dias === 1 ? "" : "s"} por vencer` : "Por vencer", color: "var(--orange)" },
+  vigente:        { texto: () => "Vigente", color: "var(--green)" },
+  sinVencimiento: { texto: () => "Cargado", color: "var(--green)" },
 };
 
 // Convierte cualquier campo de foto (URL de Storage o base64 viejo) a un
@@ -2393,10 +2402,10 @@ function abrirMaquinaria(docId, origen = "permisos") {
     link.textContent = campo === "permiso" ? "📥 Descargar PDF" : "Ver PDF";
     link.classList.toggle("hidden", !docNorm.url || !puedeVerEsteDoc);
 
-    const estado = estadoDocumento(docNorm);
+    const { estado, diasRestantes } = estadoDocumento(docNorm);
     const info = ESTADO_DOC_INFO[estado];
     const badge = document.getElementById(`maq-doc-${idSufijo}-estado`);
-    badge.textContent = info.texto(campo);
+    badge.textContent = info.texto(campo, diasRestantes);
     badge.style.display = "inline-block";
     badge.style.background = "transparent";
     badge.style.border = `1px solid ${info.color}`;
@@ -2468,7 +2477,11 @@ async function loadPermisos() {
       if (fZona && d.zona !== fZona) return;
       if (fProveedor && d.proveedor !== fProveedor) return;
 
-      const docsNorm = DOCUMENTOS_TIPOS.map(t => ({ ...t, norm: normalizarDocumento(d.documentos?.[t.campo]), estado: estadoDocumento(normalizarDocumento(d.documentos?.[t.campo])) }));
+      const docsNorm = DOCUMENTOS_TIPOS.map(t => {
+        const norm = normalizarDocumento(d.documentos?.[t.campo]);
+        const { estado, diasRestantes } = estadoDocumento(norm);
+        return { ...t, norm, estado, diasRestantes };
+      });
 
       if (fEstado === "faltante" && !docsNorm.some(x => x.estado === "faltante")) return;
       if (fEstado === "vencido" && !docsNorm.some(x => x.estado === "vencido")) return;
@@ -2489,12 +2502,12 @@ async function loadPermisos() {
 
     list.innerHTML = "";
     items.sort((a, b) => (a.eco || "").localeCompare(b.eco || "")).forEach(d => {
-      const badges = d.docsNorm.map(({ label, norm, estado, campo }) => {
+      const badges = d.docsNorm.map(({ label, norm, estado, campo, diasRestantes }) => {
         const info = ESTADO_DOC_INFO[estado];
         const venc = norm.vencimiento ? ` · vence ${norm.vencimiento}` : "";
         return `<div style="display:flex; justify-content:space-between; gap:6px; font-size:12px; padding:3px 0; border-bottom:1px solid var(--border);">
           <span>${label}</span>
-          <span style="color:${info.color};">${info.texto(campo)}${venc}</span>
+          <span style="color:${info.color};">${info.texto(campo, diasRestantes)}${venc}</span>
         </div>`;
       }).join("");
 
@@ -2780,6 +2793,26 @@ function escapeHtml(str) {
 // opts.sufijo → texto después del valor (ej. " lt/hr")
 // opts.color / opts.colorEnd → degradado de las barras
 // ============================================================
+// FIX (punto 1.2 de cambios.md): el layout anterior ponía la etiqueta a la
+// IZQUIERDA de la barra con text-anchor="end" (el texto crece hacia la
+// izquierda desde un labelW fijo de 92px) y truncaba a 15 caracteres fijos
+// sin medir el ancho real de fuente. Con zonas de nombre largo (ej. "BANCO
+// DE MATERIALES") el texto renderizado podía seguir creciendo más allá de
+// x=0, y el SVG recorta (clip) todo lo que cae fuera del viewBox — de ahí
+// las primeras letras cortadas que se ven en la captura. El mismo problema
+// podía pasar del lado derecho con valores/números grandes y un rightPad
+// fijo de 44px.
+//
+// Solución: la etiqueta ahora va ARRIBA de cada barra (texto completo,
+// ancho total disponible, sin columna angosta peleando espacio) y el valor
+// se dibuja SIEMPRE dentro del track a la derecha (ancla "end", posición
+// fija en x=chartW-rightPad), nunca pegado al final variable de la barra —
+// así ningún número, por grande que sea, puede quedar recortado. El
+// truncado del label ahora se calcula según el ancho real disponible
+// (estimando ~6.3px por carácter a 11px de fuente) en vez de un límite fijo
+// de caracteres, y el <title> conserva siempre el texto completo para
+// hover/tap. Este mismo fix aplica a dash-chart-zona/subzona y a cualquier
+// otro llamador de renderBarChart, ya que todos comparten esta función.
 function renderBarChart(containerId, data, opts = {}) {
   const cont = document.getElementById(containerId);
   if (!cont) return;
@@ -2795,32 +2828,41 @@ function renderBarChart(containerId, data, opts = {}) {
   const ordenados = [...data].sort((a, b) => b.value - a.value).slice(0, opts.maxItems || 12);
   const max = Math.max(...ordenados.map(d => Math.abs(d.value)), 1);
 
-  const rowH = 26;
-  const gap = 12;
-  const topPad = 6;
-  const labelW = 92;
-  const rightPad = 44;
   const chartW = 320;
-  const trackW = chartW - labelW - rightPad;
-  const h = ordenados.length * (rowH + gap) - gap + topPad * 2;
+  const sidePad = 6;
+  const trackW = chartW - sidePad * 2;
+  const labelH = 16;   // espacio para el texto de la etiqueta, arriba de la barra
+  const barH = 22;
+  const rowGap = 12;
+  const topPad = 4;
+  const rowH = labelH + barH;
+  const h = ordenados.length * (rowH + rowGap) - rowGap + topPad * 2;
   const gradId = `barGrad-${containerId}`;
 
+  // Ancho real disponible para el texto de la etiqueta (deja margen para
+  // no tocar el borde derecho del SVG).
+  const labelAvailPx = trackW - 4;
+  const avgCharPx = 6.3; // estimado para chart-bar-label a 11px
+  const maxChars = Math.max(6, Math.floor(labelAvailPx / avgCharPx));
+
   const gridLines = [0, 0.25, 0.5, 0.75, 1].map(f => {
-    const x = labelW + f * trackW;
-    return `<line x1="${x.toFixed(1)}" y1="0" x2="${x.toFixed(1)}" y2="${h}" class="chart-grid-line" />`;
+    const x = sidePad + f * trackW;
+    return `<line x1="${x.toFixed(1)}" y1="${topPad}" x2="${x.toFixed(1)}" y2="${h - topPad}" class="chart-grid-line" />`;
   }).join("");
 
   const bars = ordenados.map((d, i) => {
-    const y = topPad + i * (rowH + gap);
+    const groupY = topPad + i * (rowH + rowGap);
+    const barY = groupY + labelH;
     const w = Math.max((Math.abs(d.value) / max) * trackW, 3);
-    const label = escapeHtml(d.label).length > 16 ? escapeHtml(d.label).slice(0, 15) + "…" : escapeHtml(d.label);
+    const labelFull = escapeHtml(d.label);
+    const label = labelFull.length > maxChars ? labelFull.slice(0, maxChars - 1) + "…" : labelFull;
     return `
       <g>
         <title>${escapeHtml(d.label)}: ${d.value}${sufijo}</title>
-        <text x="${labelW - 8}" y="${(y + rowH / 2).toFixed(1)}" text-anchor="end" dominant-baseline="middle" class="chart-bar-label">${label}</text>
-        <rect x="${labelW}" y="${y}" width="${trackW.toFixed(1)}" height="${rowH}" rx="5" class="chart-bar-track" />
-        <rect x="${labelW}" y="${y}" width="${w.toFixed(1)}" height="${rowH}" rx="5" fill="url(#${gradId})" class="chart-bar-fill" />
-        <text x="${(labelW + w + 8).toFixed(1)}" y="${(y + rowH / 2).toFixed(1)}" dominant-baseline="middle" class="chart-bar-value">${d.value}${sufijo}</text>
+        <text x="${sidePad}" y="${(groupY + labelH - 4).toFixed(1)}" text-anchor="start" class="chart-bar-label">${label}</text>
+        <rect x="${sidePad}" y="${barY}" width="${trackW.toFixed(1)}" height="${barH}" rx="5" class="chart-bar-track" />
+        <rect x="${sidePad}" y="${barY}" width="${w.toFixed(1)}" height="${barH}" rx="5" fill="url(#${gradId})" class="chart-bar-fill" />
+        <text x="${(chartW - sidePad - 6).toFixed(1)}" y="${(barY + barH / 2).toFixed(1)}" text-anchor="end" dominant-baseline="middle" class="chart-bar-value">${d.value}${sufijo}</text>
       </g>`;
   }).join("");
 
@@ -3042,7 +3084,13 @@ async function loadDashboard() {
     });
 
     // --- KPIs Bajo/Medio/Alto: usa el último rendimiento registrado de cada máquina ---
+    // FIX (punto 1.1 de cambios.md): antes solo se guardaba el conteo agregado
+    // (conteo.Bajo, etc.) y se descartaba el detalle por máquina ya calculado
+    // en este mismo ciclo. Ahora se guarda también en window._dashDetalle para
+    // que mostrarMaquinasPorNivel() pueda listar, al hacer click en un KPI,
+    // exactamente qué máquinas cayeron en ese nivel.
     const conteo = { Bajo: 0, Medio: 0, Alto: 0, "Sin datos": 0 };
+    const detalle = { Bajo: [], Medio: [], Alto: [], "Sin datos": [] };
     await Promise.all(filtradas.map(async m => {
       const clave = m.numInterno || m.eco || m.id;
       try {
@@ -3058,8 +3106,13 @@ async function loadDashboard() {
         });
         const claseReal = mejorValor == null ? "Sin datos" : (clasificarConsumo(mejorValor, m.consumoBajo, m.consumoMedio, m.consumoAlto) || "Sin datos");
         conteo[claseReal] = (conteo[claseReal] || 0) + 1;
-      } catch (e) { conteo["Sin datos"]++; }
+        detalle[claseReal].push({ eco: m.eco || m.numInterno || clave, tipo: m.tipo || "—", zona: m.zona || "Sin zona", valor: mejorValor });
+      } catch (e) {
+        conteo["Sin datos"]++;
+        detalle["Sin datos"].push({ eco: m.eco || m.numInterno || clave, tipo: m.tipo || "—", zona: m.zona || "Sin zona", valor: null });
+      }
     }));
+    window._dashDetalle = detalle;
 
     document.getElementById("dash-kpis").innerHTML = `
       <div class="kpi-card kpi-neutral">
@@ -3067,22 +3120,26 @@ async function loadDashboard() {
         <div class="kpi-num">${filtradas.length}</div>
         <div class="kpi-label">Máquinas filtradas</div>
       </div>
-      <div class="kpi-card kpi-green">
+      <div class="kpi-card kpi-green kpi-clickable" onclick="mostrarMaquinasPorNivel('Bajo')">
         <div class="kpi-icon">🟢</div>
         <div class="kpi-num" style="color:var(--green);">${conteo.Bajo}</div>
         <div class="kpi-label">Consumo bajo</div>
       </div>
-      <div class="kpi-card kpi-orange">
+      <div class="kpi-card kpi-orange kpi-clickable" onclick="mostrarMaquinasPorNivel('Medio')">
         <div class="kpi-icon">🟠</div>
         <div class="kpi-num" style="color:var(--orange);">${conteo.Medio}</div>
         <div class="kpi-label">Consumo medio</div>
       </div>
-      <div class="kpi-card kpi-red">
+      <div class="kpi-card kpi-red kpi-clickable" onclick="mostrarMaquinasPorNivel('Alto')">
         <div class="kpi-icon">🔴</div>
         <div class="kpi-num" style="color:var(--red);">${conteo.Alto}</div>
         <div class="kpi-label">Consumo alto</div>
       </div>
     `;
+    // Si había un detalle de nivel abierto de una consulta anterior, se
+    // oculta al recargar (los filtros pudieron cambiar los datos).
+    const panelDetalle = document.getElementById("dash-detalle-nivel");
+    if (panelDetalle) { panelDetalle.classList.add("hidden"); panelDetalle.innerHTML = ""; }
 
     renderDonutChart("dash-donut", [
       { label: "Bajo", value: conteo.Bajo, color: "var(--green)" },
@@ -3125,6 +3182,45 @@ async function loadDashboard() {
     document.getElementById("dash-kpis").innerHTML = `<p style="color:var(--red);">❌ Error: ${e.message}</p>`;
     console.error("loadDashboard error:", e);
   }
+}
+
+// FIX (punto 1.1 de cambios.md): nueva función — al hacer click en un
+// KPI-card de consumo (Bajo/Medio/Alto) despliega, debajo de la dona, la
+// lista de máquinas que cayeron en ese nivel (reutiliza el patrón visual
+// de .history-card ya usado en Maquinaria/Permisos).
+function mostrarMaquinasPorNivel(nivel) {
+  const panel = document.getElementById("dash-detalle-nivel");
+  if (!panel) return;
+  const items = (window._dashDetalle && window._dashDetalle[nivel]) || [];
+
+  const ETIQUETA_NIVEL = { Bajo: "🟢 Consumo bajo", Medio: "🟠 Consumo medio", Alto: "🔴 Consumo alto" };
+  const COLOR_NIVEL = { Bajo: "var(--green)", Medio: "var(--orange)", Alto: "var(--red)" };
+
+  // Click de nuevo sobre el mismo nivel ya abierto: colapsa el panel.
+  if (panel.dataset.nivel === nivel && !panel.classList.contains("hidden")) {
+    panel.classList.add("hidden");
+    panel.innerHTML = "";
+    delete panel.dataset.nivel;
+    return;
+  }
+  panel.dataset.nivel = nivel;
+
+  if (!items.length) {
+    panel.innerHTML = `<div class="chart-empty">📭 Ninguna máquina en este nivel con los filtros actuales.</div>`;
+  } else {
+    const filas = items
+      .sort((a, b) => (a.eco || "").localeCompare(b.eco || ""))
+      .map(it => `
+        <div class="history-card">
+          <div class="hc-header"><span>${escapeHtml(it.eco)}</span><span style="color:${COLOR_NIVEL[nivel] || "var(--text)"};">${it.valor != null ? it.valor.toFixed(2) + " lt/hr" : "Sin dato"}</span></div>
+          <p style="color:var(--text-muted); font-size:12px; margin-top:4px;">${escapeHtml(it.tipo)} · ${escapeHtml(it.zona)}</p>
+        </div>`).join("");
+    panel.innerHTML = `
+      <h3 class="chart-section-title">${ETIQUETA_NIVEL[nivel] || nivel} — ${items.length} máquina${items.length === 1 ? "" : "s"}</h3>
+      ${filas}`;
+  }
+  panel.classList.remove("hidden");
+  panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 /* EXPORTACIONES PARA EL HTML */
@@ -3181,3 +3277,9 @@ window.poblarSubzonas = poblarSubzonas;
 window.loadResumen = loadResumen;
 window.descargarResumenPDF = descargarResumenPDF;
 window.loadDashboard = loadDashboard;
+// FIX (punto 1.1 de cambios.md): faltaba exponer esta función en window —
+// app.js se carga como <script type="module">, así que las funciones de
+// nivel superior NO son globales por defecto. Sin esta línea, el
+// onclick="mostrarMaquinasPorNivel('Bajo')" de los KPI-cards lanzaba
+// "mostrarMaquinasPorNivel is not defined" al hacer click.
+window.mostrarMaquinasPorNivel = mostrarMaquinasPorNivel;
