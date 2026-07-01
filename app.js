@@ -2372,12 +2372,12 @@ async function loadMaquinaria() {
 
     const puedeEditar = Roles.puedeEditarMaquinaria(currentRol);
     list.innerHTML = "";
-    items.sort((a, b) => (a.eco || "").localeCompare(b.eco || "")).forEach(d => {
+    items.sort((a, b) => (a.numInterno || a.eco || "").localeCompare(b.numInterno || b.eco || "")).forEach(d => {
       const docsOk = DOCUMENTOS_TIPOS.filter(t => normalizarDocumento(d.documentos?.[t.campo]).tiene).length;
       const docsTotal = 5;
       list.innerHTML += `
         <div class="history-card" style="cursor:pointer;" onclick="abrirMaquinaria('${d.id}', 'maquinaria')">
-          <div class="hc-header"><span>${d.eco || d.numInterno || "—"}</span><span>${d.activa === false ? "🔴 Inactiva" : "🟢 Activa"}</span></div>
+          <div class="hc-header"><span>${d.numInterno || d.eco || "—"}</span><span>${d.activa === false ? "🔴 Inactiva" : "🟢 Activa"}</span></div>
           <p style="color:var(--text-muted); font-size:12px; margin-top:5px;">
             ${d.tipo || "—"} · ${d.marca || ""} ${d.modelo || ""}<br/>
             ${d.zona || "Sin zona"} ${d.subzona ? "· " + d.subzona : ""} · ${d.propiedad || "—"}<br/>
@@ -2563,7 +2563,7 @@ async function loadPermisos() {
     if (!items.length) { list.innerHTML = "<p>No hay maquinaria que coincida con el filtro.</p>"; return; }
 
     list.innerHTML = "";
-    items.sort((a, b) => (a.eco || "").localeCompare(b.eco || "")).forEach(d => {
+    items.sort((a, b) => (a.numInterno || a.eco || "").localeCompare(b.numInterno || b.eco || "")).forEach(d => {
       const badges = d.docsNorm.map(({ label, norm, estado, campo, diasRestantes }) => {
         const info = ESTADO_DOC_INFO[estado];
         const venc = norm.vencimiento ? ` · vence ${norm.vencimiento}` : "";
@@ -2575,7 +2575,7 @@ async function loadPermisos() {
 
       list.innerHTML += `
         <div class="history-card" style="cursor:pointer;" onclick="abrirMaquinaria('${d.id}')">
-          <div class="hc-header"><span>${d.eco || d.numInterno || "—"}</span><span>${d.activa === false ? "🔴 Inactiva" : "🟢 Activa"}</span></div>
+          <div class="hc-header"><span>${d.numInterno || d.eco || "—"}</span><span>${d.activa === false ? "🔴 Inactiva" : "🟢 Activa"}</span></div>
           <p style="color:var(--text-muted); font-size:12px; margin:5px 0 8px;">${d.tipo || "—"} · ${d.zona || "Sin zona"}</p>
           ${badges}
         </div>`;
@@ -3243,7 +3243,7 @@ async function loadDashboard() {
     const fProv = document.getElementById("dash-f-proveedor").value;
 
     document.getElementById("dash-f-eco").innerHTML = `<option value="">Todas las máquinas</option>` +
-      lista.map(m => `<option value="${m.numInterno || m.eco || m.id}">${m.eco || m.numInterno} — ${m.tipo || ""}</option>`).join("");
+      lista.map(m => `<option value="${m.numInterno || m.eco || m.id}">${m.numInterno || m.eco} — ${m.tipo || ""}</option>`).join("");
     document.getElementById("dash-f-eco").value = fEco;
 
     const zonas = [...new Set(lista.map(m => m.zona).filter(Boolean))].sort();
@@ -3284,10 +3284,10 @@ async function loadDashboard() {
         });
         const claseReal = mejorValor == null ? "Sin datos" : (clasificarConsumo(mejorValor, m.consumoBajo, m.consumoMedio, m.consumoAlto) || "Sin datos");
         conteo[claseReal] = (conteo[claseReal] || 0) + 1;
-        detalle[claseReal].push({ eco: m.eco || m.numInterno || clave, tipo: m.tipo || "—", zona: m.zona || "Sin zona", valor: mejorValor });
+        detalle[claseReal].push({ eco: m.numInterno || m.eco || clave, tipo: m.tipo || "—", zona: m.zona || "Sin zona", valor: mejorValor });
       } catch (e) {
         conteo["Sin datos"]++;
-        detalle["Sin datos"].push({ eco: m.eco || m.numInterno || clave, tipo: m.tipo || "—", zona: m.zona || "Sin zona", valor: null });
+        detalle["Sin datos"].push({ eco: m.numInterno || m.eco || clave, tipo: m.tipo || "—", zona: m.zona || "Sin zona", valor: null });
       }
     }));
     window._dashDetalle = detalle;
