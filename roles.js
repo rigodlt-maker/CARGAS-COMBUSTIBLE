@@ -46,15 +46,21 @@ export function tabsVisibles(rol) {
 
 /* ───────────────────────────── CARGAS / HISTORIAL ───────────────────────────── */
 
-export function puedeCapturarCarga(rol) {
-  return rol !== ROLES.VISOR;
-}
-
-export function puedeVerHistorial(rol) {
-  return rol !== ROLES.VISOR;
-}
+// LIMPIEZA (bugs.txt / revisión de código muerto): se quitaron
+// puedeCapturarCarga(), puedeVerHistorial() y puedeDescargarPDFHistorial().
+// Las tres eran funciones fantasma (declaradas, exportadas, pero nunca
+// llamadas desde app.js ni index.html): la visibilidad de las pestañas
+// 'cargas'/'historial' ya la resuelve tabsVisibles()/TABS_POR_ROL, y la
+// captura de cargas y el botón de descargar PDF del historial nunca
+// estuvieron condicionados por ellas (el botón de PDF siempre se mostró
+// sin gate de rol, y las reglas de Firestore ya bloquean a Visor de
+// cualquier forma). Si en el futuro se requiere una restricción real que
+// hoy no existe, hay que crear la función Y conectarla a un botón/if.
 
 // Editar un registro YA conciliado: solo Master.
+// FIX: esta función SÍ estaba declarada pero antes era fantasma (nadie la
+// llamaba) — loadHistory() en app.js ahora la usa para mostrar el botón
+// "Editar (conciliado)" solo a Master, cumpliendo Instrucciones.txt punto 1.
 export function puedeEditarConciliado(rol) {
   return rol === ROLES.MASTER;
 }
@@ -68,10 +74,6 @@ export function puedeEditarNoConciliado(rol) {
 
 export function puedeConciliar(rol) {
   return rol === ROLES.MASTER;
-}
-
-export function puedeDescargarPDFHistorial(rol) {
-  return [ROLES.COORDINADOR, ROLES.ADMIN, ROLES.MASTER].includes(rol);
 }
 
 /* ───────────────────────────── USUARIOS ───────────────────────────── */

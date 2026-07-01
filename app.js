@@ -370,7 +370,13 @@ async function loadFirebase() {
 let currentUser = null;
 let currentStep = 1;
 let isAdmin = false;   // true si el rol puede editar registros NO conciliados (Coordinador/Admin/Master)
-let isMaster = false;  // true solo si el rol puede conciliar y editar YA conciliado (Master)
+let isMaster = false;  // true solo si el rol puede conciliar (Master)
+// FIX: el comentario original de isMaster decía "y editar YA conciliado", pero esa
+// facultad (Instrucciones.txt punto 1) nunca se conectó a ningún botón — loadHistory()
+// ocultaba el botón "Editar" por completo en cuanto esConciliado === true, incluso para
+// Master. roles.js sí tenía lista la función puedeEditarConciliado(), simplemente nadie
+// la llamaba (código fantasma). Se agrega este flag para usarla de verdad en loadHistory().
+let puedeEditarConciliado = false;
 let currentRol = null; // 'master' | 'admin' | 'coordinador' | 'residente' | 'visor'
 
 let dataFotos = { ini: null, fin: null, ticket: null, pend: null, horo: null };
@@ -483,6 +489,9 @@ function initAuth() {
       // Gates generales reutilizados en el resto del código (historial/conciliación)
       isAdmin  = Roles.puedeEditarNoConciliado(currentRol);
       isMaster = Roles.puedeConciliar(currentRol);
+      // FIX: antes esta facultad (Instrucciones.txt punto 1: Master edita incluso
+      // ya conciliado) estaba definida en roles.js pero no se leía en ningún lado.
+      puedeEditarConciliado = Roles.puedeEditarConciliado(currentRol);
 
       // Mostrar/ocultar TODAS las pestañas según la matriz central de roles.js,
       // en vez de ir prendiendo una por una como antes.
@@ -1500,6 +1509,14 @@ async function loadHistory() {
       // EXCLUSIVA de eliminar registros directamente desde la interfaz —
       // antes no existía ningún botón para esto en toda la app (y la regla
       // de Firestore lo bloqueaba con "if false" incluso para Master).
+      // FIX (Instrucciones.txt punto 1 + roles.js::puedeEditarConciliado — antes
+      // era código fantasma que nadie llamaba): el Master SÍ debe poder editar un
+      // registro aunque ya esté conciliado, para acelerar aclaraciones sin tener
+      // que entrar a Firebase. Antes de este fix, en cuanto esConciliado === true
+      // el botón "Editar" desaparecía para TODOS los roles, incluido Master.
+      if (esConciliado && puedeEditarConciliado) {
+        botones += `<button class="btn btn-ghost btn-sm" style="color:var(--blue); border:1px solid var(--blue);" onclick="abrirEditar('${docSnap.id}')">✏️ Editar (conciliado)</button>`;
+      }
       if (isMaster) {
         botones += `<button class="btn btn-ghost btn-sm" style="color:var(--red); border:1px solid var(--red);" onclick="eliminarRegistro('${docSnap.id}')">🗑️ Eliminar</button>`;
       }
@@ -1741,8 +1758,40 @@ async function descargarFotoProveedor(docId) {
 
 /* --- PDF DE CONCILIACIÓN DE PROVEEDOR DEL DÍA (punto A) ---
    Encabezado con la fecha y TODOS los # de ticket capturados ese día,
-   seguido de las fotos de los tickets en bloques de hasta 3 por hoja,
-   en formato vertical (una debajo de otra) para que quepan completas. */
+   seguido de las fotos de los tickets con acomodo dinámico según el total:
+     1 ticket  -> página completa
+     2 tickets -> lado a lado en 1 página
+     3 tickets -> apilados verticalmente en 1 página
+     4+ tickets -> se reparten en páginas de 3 (preferido) y de 2, sin dejar
+       nunca una página "huérfana" de 1 solo ticket salvo que N=1 (sería
+       inevitable). Ej.: 4=[2,2] · 5=[3,2] · 6=[3,3] · 7=[3,2,2] · 8=[3,3,2]
+       · 9=[3,3,3] · 10=[3,3,2,2].
+   FIX de layout: antes la imagen solo se centraba horizontalmente dentro
+   de su caja; si la foto era más "cuadrada"/panorámica que la caja (alta y
+   angosta), quedaba pegada arriba con un hueco en blanco abajo (bug visible
+   en la captura del PDF de "Conciliación de Proveedor"). Ahora se centra
+   también verticalmente (fit "contain" real). */
+function agruparTicketsPorPagina(n) {
+  if (n <= 0) return [];
+  const grupos = [];
+  const q = Math.floor(n / 3);
+  const r = n % 3;
+  if (r === 0) {
+    for (let i = 0; i < q; i++) grupos.push(3);
+  } else if (r === 2) {
+    for (let i = 0; i < q; i++) grupos.push(3);
+    grupos.push(2);
+  } else { // r === 1
+    if (q === 0) {
+      grupos.push(1); // único ticket total: no hay forma de evitarlo
+    } else {
+      for (let i = 0; i < q - 1; i++) grupos.push(3);
+      grupos.push(2, 2); // cambia el último "3+1" por dos páginas de "2"
+    }
+  }
+  return grupos;
+}
+
 async function descargarProveedorPDF() {
   const fecha = document.getElementById("prov-fecha").value;
   const items = Object.entries(window._provCache || {}).map(([id, d]) => ({ id, ...d }));
@@ -1781,49 +1830,75 @@ async function descargarProveedorPDF() {
     }
     dibujarEncabezado();
 
-    // --- Fotos: hasta 3 por hoja, apiladas verticalmente ---
+    // Dibuja un ticket (etiqueta + caja con foto centrada en ambos ejes) dentro
+    // del rectángulo (x, y, w, h) que le corresponda según el layout de esa página.
+    function dibujarTicketEnCaja(x, y, w, h, d, data) {
+      const espacioLabel = 0.24;
+      doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold"); doc.setFontSize(9.5);
+      const lineaLabel = doc.splitTextToSize(
+        `Ticket: ${d.ticket || "—"}   |   ${d.tipoCombustible}   |   ${Number(d.litros).toFixed(2)} L   |   $${Number(d.precio || 0).toFixed(2)}/L`,
+        w
+      );
+      doc.text(lineaLabel, x, y + espacioLabel - 0.08);
+
+      const yCaja = y + espacioLabel;
+      const altoCaja = h - espacioLabel;
+      doc.setDrawColor(225, 225, 225);
+      doc.rect(x, yCaja, w, altoCaja);
+
+      if (data) {
+        let props;
+        try { props = doc.getImageProperties(data); } catch (e) { props = null; }
+        if (props) {
+          // "contain": ajusta por el eje que primero toque el borde de la caja,
+          // y centra sobrante tanto horizontal como VERTICALMENTE (antes solo
+          // se centraba horizontal, dejando el hueco en blanco del bug).
+          let dw = w, dh = (props.height * dw) / props.width;
+          if (dh > altoCaja) { dh = altoCaja; dw = (props.width * dh) / props.height; }
+          const dx = x + (w - dw) / 2;
+          const dy = yCaja + (altoCaja - dh) / 2;
+          doc.addImage(data, "JPEG", dx, dy, dw, dh);
+        }
+      } else {
+        doc.setFillColor(245, 245, 245);
+        doc.rect(x, yCaja, w, altoCaja, "F");
+        doc.setTextColor(150, 150, 150); doc.setFontSize(9); doc.setFont("helvetica", "italic");
+        doc.text("Foto no disponible", x + w / 2, yCaja + altoCaja / 2, { align: "center" });
+      }
+    }
+
     const fotosData = await Promise.all(items.map(async d => ({
       d, data: await urlADataURL(d.fotoTicket),
     })));
 
     const yInicio1 = headerH + 0.25;
     const gap = 0.2;
-    let pagina = 0;
-    for (let i = 0; i < fotosData.length; i += 3) {
-      const grupo = fotosData.slice(i, i + 3);
-      if (pagina > 0) { doc.addPage(); }
+    const grupos = agruparTicketsPorPagina(fotosData.length);
+
+    let indice = 0;
+    grupos.forEach((tam, pagina) => {
+      if (pagina > 0) doc.addPage();
       const yTop = pagina === 0 ? yInicio1 : margin;
       const alturaDisponible = pageH - margin - yTop;
-      const espacioLabel = 0.22;
-      const altoCaja = (alturaDisponible - espacioLabel * grupo.length - gap * (grupo.length - 1)) / grupo.length;
+      const grupo = fotosData.slice(indice, indice + tam);
+      indice += tam;
 
-      let yCursor = yTop;
-      grupo.forEach(({ d, data }) => {
-        doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold"); doc.setFontSize(9.5);
-        doc.text(`Ticket: ${d.ticket || "—"}   |   ${d.tipoCombustible}   |   ${Number(d.litros).toFixed(2)} L   |   $${Number(d.precio || 0).toFixed(2)}/L`, margin, yCursor + espacioLabel - 0.06);
-
-        const yCaja = yCursor + espacioLabel;
-        if (data) {
-          let props;
-          try { props = doc.getImageProperties(data); } catch (e) { props = null; }
-          if (props) {
-            let dw = contentW, dh = (props.height * dw) / props.width;
-            if (dh > altoCaja) { dh = altoCaja; dw = (props.width * dh) / props.height; }
-            const dx = margin + (contentW - dw) / 2;
-            doc.setDrawColor(225, 225, 225);
-            doc.rect(margin, yCaja, contentW, altoCaja);
-            doc.addImage(data, "JPEG", dx, yCaja, dw, dh);
-          }
-        } else {
-          doc.setDrawColor(210, 210, 210); doc.setFillColor(245, 245, 245);
-          doc.rect(margin, yCaja, contentW, altoCaja, "FD");
-          doc.setTextColor(150, 150, 150); doc.setFontSize(9); doc.setFont("helvetica", "italic");
-          doc.text("Foto no disponible", margin + contentW / 2, yCaja + altoCaja / 2, { align: "center" });
-        }
-        yCursor += espacioLabel + altoCaja + gap;
-      });
-      pagina++;
-    }
+      if (tam === 1) {
+        // Único ticket de la página: ocupa todo el ancho y alto disponibles.
+        dibujarTicketEnCaja(margin, yTop, contentW, alturaDisponible, grupo[0].d, grupo[0].data);
+      } else if (tam === 2) {
+        // Dos tickets lado a lado (columnas), cada uno a todo el alto disponible.
+        const colW = (contentW - gap) / 2;
+        dibujarTicketEnCaja(margin, yTop, colW, alturaDisponible, grupo[0].d, grupo[0].data);
+        dibujarTicketEnCaja(margin + colW + gap, yTop, colW, alturaDisponible, grupo[1].d, grupo[1].data);
+      } else {
+        // Tres tickets apilados verticalmente (formato original).
+        const filaH = (alturaDisponible - gap * (grupo.length - 1)) / grupo.length;
+        grupo.forEach((item, i) => {
+          dibujarTicketEnCaja(margin, yTop + i * (filaH + gap), contentW, filaH, item.d, item.data);
+        });
+      }
+    });
 
     doc.save(`Proveedor_${fecha}.pdf`);
     hideLoading();
